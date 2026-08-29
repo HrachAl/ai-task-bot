@@ -1,0 +1,17 @@
+.container {
+  position: fixed;
+  top: var(--space-5);
+  right: var(--space-5);
+  z-index: 200;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+@media (max-width: 640px) {
+  .container {
+    left: var(--space-3);
+    right: var(--space-3);
+    top: var(--space-3);
+  }
+}

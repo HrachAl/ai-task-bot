@@ -1,0 +1,29 @@
+.board {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-4);
+  align-items: start;
+  flex: 1;
+  min-height: 0;
+}
+
+.overlayWrapper {
+  width: 300px;
+}
+
+@media (max-width: 900px) {
+  .board {
+    display: flex;
+    align-items: flex-start;
+    overflow-x: auto;
+    overflow-y: visible;
+    padding-bottom: var(--space-2);
+    scroll-snap-type: x proximity;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .board > * {
+    flex: 0 0 min(340px, 85vw);
+    scroll-snap-align: start;
+  }
+}

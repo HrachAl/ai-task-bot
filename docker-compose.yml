@@ -1,0 +1,102 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-taskbot}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-taskbot}
+      POSTGRES_DB: ${POSTGRES_DB:-taskbot}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-taskbot}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # FastAPI REST API + WebSocket server. Runs `alembic upgrade head` on
+  # startup (see backend/entrypoint.sh) — the single place migrations run.
+  backend:
+    build: ./backend
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-taskbot}:${POSTGRES_PASSWORD:-taskbot}@postgres:5432/${POSTGRES_DB:-taskbot}
+      REDIS_URL: redis://redis:6379/0
+      REDIS_PUBSUB_URL: redis://redis:6379/1
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+
+  # Celery worker: voice transcription pipeline (download -> Whisper -> DB).
+  # Shares the backend image but skips entrypoint.sh (no migrations here —
+  # only `backend` runs those, avoiding a race between multiple migrators).
+  worker:
+    build: ./backend
+    command: celery -A app.worker.celery_app worker -Q transcription -c 2 --loglevel=info
+    entrypoint: []
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-taskbot}:${POSTGRES_PASSWORD:-taskbot}@postgres:5432/${POSTGRES_DB:-taskbot}
+      REDIS_URL: redis://redis:6379/0
+      REDIS_PUBSUB_URL: redis://redis:6379/1
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "celery", "-A", "app.worker.celery_app", "inspect", "ping", "--timeout", "5"]
+      interval: 15s
+      timeout: 10s
+      retries: 6
+      start_period: 20s
+
+  # aiogram bot: Telegram I/O only, talks HTTP to `backend` — never touches
+  # Postgres/Redis directly. Requires a real TELEGRAM_BOT_TOKEN in .env to do
+  # anything useful; without one it exits immediately (harmless — the REST
+  # API, WebSocket, and worker all function independently of the bot).
+  bot:
+    build: ./backend
+    command: python -m app.bot.main
+    entrypoint: []
+    env_file:
+      - .env
+    environment:
+      BACKEND_INTERNAL_URL: http://backend:8000
+    depends_on:
+      backend:
+        condition: service_healthy
+
+  # React dashboard, built and served by nginx, which also proxies /api and
+  # /ws to `backend` — same-origin in the browser, so no CORS is needed.
+  frontend:
+    build: ./frontend
+    ports:
+      - "3000:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+
+volumes:
+  pgdata:
