@@ -109,7 +109,7 @@ cp .env.example .env
 docker compose up --build
 ```
 
-- Dashboard: **http://localhost:3000**
+- Dashboard: **http://localhost:3001**
 - API docs (Swagger UI): **http://localhost:8001/docs**
 - Health check: **http://localhost:8001/api/health**
 
@@ -185,7 +185,7 @@ with three different commands — shared code, three deployables. `worker` and `
 skip the image's migration step (`entrypoint: []` override in `docker-compose.yml`)
 so migrations only ever run once, from `backend`.
 
-Ports published to the host: **3000** (dashboard) and **8001** (API). Postgres and
+Ports published to the host: **3001** (dashboard) and **8001** (API). Postgres and
 Redis are only reachable on the internal Docker network — not published to the host —
 since nothing outside the compose network needs to reach them directly.
 
@@ -309,7 +309,7 @@ cp .env.example .env   # add TELEGRAM_BOT_TOKEN + OPENAI_API_KEY to test the bot
 docker compose up --build
 ```
 
-1. Open http://localhost:3000 — empty board, green "Live" WebSocket badge.
+1. Open http://localhost:3001 — empty board, green "Live" WebSocket badge.
 2. Click **New Task**, fill in a title, submit — it appears on the board instantly,
    no reload.
 3. Message your bot on Telegram: plain text → a task appears on the board within a
