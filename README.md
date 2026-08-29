@@ -110,8 +110,12 @@ docker compose up --build
 ```
 
 - Dashboard: **http://localhost:3000**
-- API docs (Swagger UI): **http://localhost:8000/docs**
-- Health check: **http://localhost:8000/api/health**
+- API docs (Swagger UI): **http://localhost:8001/docs**
+- Health check: **http://localhost:8001/api/health**
+
+(Port `8001` is only the **host-side** port — inside the Docker network, `backend`
+still listens on `8000`; only its published port on the host was moved, e.g. to avoid
+clashing with something else already running on port 8000 on the host machine.)
 
 The dashboard loads the full task list via `GET /api/tasks` on first paint, then a
 WebSocket connection (`/ws/tasks`, proxied by nginx) keeps it in sync live — no
@@ -181,7 +185,7 @@ with three different commands — shared code, three deployables. `worker` and `
 skip the image's migration step (`entrypoint: []` override in `docker-compose.yml`)
 so migrations only ever run once, from `backend`.
 
-Ports published to the host: **3000** (dashboard) and **8000** (API). Postgres and
+Ports published to the host: **3000** (dashboard) and **8001** (API). Postgres and
 Redis are only reachable on the internal Docker network — not published to the host —
 since nothing outside the compose network needs to reach them directly.
 
@@ -321,7 +325,7 @@ docker compose up --build
 
 - **No authentication.** Per the assessment's explicit scope, there's no auth layer.
   `POST /api/tasks` and `POST /api/tasks/voice` are open — trusted callers only
-  (the bot and the dashboard). Don't expose port 8000 to the public internet as-is.
+  (the bot and the dashboard). Don't expose port 8001 to the public internet as-is.
 - **At-least-once voice processing.** `task_acks_late=True` means a worker crashing
   in the narrow window between committing a task and acknowledging the message could
   cause that voice message to be processed twice on redelivery. This is the standard,
