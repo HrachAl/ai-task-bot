@@ -1,8 +1,7 @@
 """How a caller gets a board, and how the board stays theirs.
 
-There is no registration form in this project on purpose: a Telegram account
-*is* the account. These tests pin down the two ways a request proves who it
-is, and that a request with no proof gets nothing.
+Covers the two ways a request proves who it is, and that a request with no
+proof gets nothing.
 """
 
 from httpx import AsyncClient

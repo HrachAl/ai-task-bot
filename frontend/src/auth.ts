@@ -1,9 +1,8 @@
-/** Dashboard access, without a registration form.
+/** Dashboard access.
  *
- * There is no sign-up and no password anywhere in this project: the bot
- * hands each Telegram user a link containing their personal token
- * (`/dashboard`), the token is exchanged for that user's board, and it is
- * kept in localStorage so the link only has to be followed once per device.
+ * There is no sign-up form: the bot hands each user a link carrying their
+ * personal token, which is kept in localStorage so the link only has to be
+ * followed once per browser.
  */
 
 const STORAGE_KEY = 'ai-task-bot-token'
@@ -13,8 +12,8 @@ function readStored(): string | null {
   try {
     return window.localStorage.getItem(STORAGE_KEY)
   } catch {
-    // Private-mode browsers can throw on storage access — the session still
-    // works for as long as the tab lives, it just won't be remembered.
+    // Private-mode browsers can throw on storage access. The session still
+    // works for the life of the tab, it just isn't remembered.
     return null
   }
 }
@@ -27,9 +26,9 @@ function write(token: string): void {
   }
 }
 
-/** Pull `?token=...` out of the URL on first load, remember it, and scrub it
- * from the address bar so the secret isn't left sitting in browser history
- * or copied along when the user shares the page URL. */
+/** Pull `?token=...` out of the URL, remember it, and scrub it from the
+ * address bar so the secret isn't left in history or copied when the page
+ * URL is shared. */
 export function captureTokenFromUrl(): string | null {
   const params = new URLSearchParams(window.location.search)
   const token = params.get(TOKEN_PARAM)

@@ -16,13 +16,9 @@ import type { Me, TaskStatus } from './types'
 import buttons from './styles/buttons.module.css'
 import styles from './App.module.css'
 
-/** Session gate.
- *
- * The board is per-user, so nothing is fetched until we know *which* user is
- * looking. Identity comes from the personal link the Telegram bot hands out
- * — there is no login form to fall back to, which is why an unresolved
- * session renders the connect instructions rather than an empty board.
- */
+/** Session gate. The board is per-user, so nothing is fetched until we know
+ * which user is looking; an unresolved session renders the connect
+ * instructions rather than an empty board. */
 export function App() {
   const [theme, toggleTheme] = useTheme()
   const { state, retry, signOut } = useSession()
@@ -98,8 +94,8 @@ function Dashboard({ user, theme, onToggleTheme, onSignOut }: DashboardProps) {
     setIsRefreshing(false)
   }, [refresh])
 
-  // Drag-and-drop is fire-and-forget from the board's perspective — the
-  // page owns turning a failed PATCH into a visible rollback notice.
+  // Drag-and-drop is fire-and-forget for the board; the page turns a failed
+  // PATCH into a visible rollback notice.
   function handleBoardStatusChange(id: number, status: TaskStatus) {
     void changeStatus(id, status).catch((err) => {
       showToast(

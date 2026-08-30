@@ -41,16 +41,12 @@ class Settings(BaseSettings):
 
     # --- Bot -> backend integration ---
     backend_internal_url: str = "http://localhost:8000"
-    # Shared secret that lets the bot call the API *on behalf of* a Telegram
-    # user (it sends X-Internal-Token + X-Telegram-Id instead of a personal
-    # bearer token). Bot and backend read the same env var, so the default
-    # works out of the box on the private Docker network; override it in .env
-    # if the API is ever exposed directly.
-    internal_api_token: str = "internal-dev-token"
+    # Shared secret that lets the bot act on behalf of a Telegram user. The
+    # default is for local development only — see .env.example.
+    internal_api_token: str = "local-dev-only-change-me"
 
     # --- Dashboard ---
-    # Public base URL of the React dashboard, used to build the personal
-    # login link the bot sends on /dashboard.
+    # Public base URL, used to build the link the bot sends on /dashboard.
     dashboard_base_url: str = "http://localhost:3001"
 
     @property

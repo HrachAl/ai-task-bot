@@ -1,11 +1,8 @@
-"""Thin async HTTP client the bot uses to talk to the backend. Keeping the
-bot's only external dependency an HTTP call (not a DB session, not a Celery
-producer) is what lets it stay a pure Telegram I/O layer.
+"""HTTP client the bot uses to reach the backend.
 
-Every call is made *on behalf of* a Telegram user: the bot proves it is the
-trusted internal service with a shared secret, and names the user it is
-acting for. The backend resolves that pair into a real user account, so the
-bot never has to know or cache anyone's personal dashboard token.
+The bot's only dependency being an HTTP call — not a DB session, not a Celery
+producer — is what keeps it a pure Telegram I/O layer. Each call names the
+user it acts for, so the bot never caches anyone's personal token.
 """
 
 import httpx
@@ -102,7 +99,7 @@ class BackendClient:
             raise BackendError(
                 f"Backend returned {response.status_code} for {path}: {response.text[:200]}"
             )
-        # A successful DELETE answers 204 with no body — nothing to parse.
+        # A successful DELETE answers 204 with no body.
         if response.status_code == 204 or not response.content:
             return None
         return response.json()

@@ -87,8 +87,7 @@ export function Header({
   )
 }
 
-/** Telegram usernames are optional, so fall back to the numeric id — it is
- * still the person's own identity, just less friendly. */
+/** Telegram usernames are optional, so fall back to the numeric id. */
 function displayName(user: Me): string {
   return user.username ? `@${user.username}` : `id ${user.telegram_id}`
 }

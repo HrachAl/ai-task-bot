@@ -12,9 +12,8 @@ logger = logging.getLogger(__name__)
 
 
 async def _publish_safely(event_type: str, task: Task | TaskRead) -> None:
-    """A task that was already committed to PostgreSQL must never be failed
-    by a broken realtime layer — belt-and-suspenders on top of
-    publish_task_event's own internal safety net."""
+    """A change already committed to PostgreSQL must not be failed by a
+    broken realtime layer."""
     try:
         await publish_task_event(event_type, task)
     except Exception:
@@ -35,9 +34,8 @@ async def list_tasks(
 
 
 async def get_task(db: AsyncSession, task_id: int, *, owner: User) -> Task:
-    """A task owned by someone else is reported as *not found*, not as
-    forbidden — otherwise the 403/404 difference would leak which task ids
-    exist on other people's boards."""
+    """A task owned by someone else reads as not found, not forbidden: a 403
+    would confirm the id exists on another board."""
     task = await db.get(Task, task_id)
     if task is None or task.user_id != owner.id:
         raise TaskNotFoundError(task_id)
@@ -75,9 +73,8 @@ async def update_task(
 
 async def delete_task(db: AsyncSession, task_id: int, *, owner: User) -> None:
     task = await get_task(db, task_id, owner=owner)
-    # Snapshot before the delete: once the row is gone the ORM object's
-    # attributes can no longer be read, and the event still has to say which
-    # task disappeared and whose board to remove it from.
+    # Snapshot first: once the row is gone its attributes can't be read, and
+    # the event still has to name the task and the board it left.
     deleted = TaskRead.model_validate(task)
     await db.delete(task)
     await db.commit()

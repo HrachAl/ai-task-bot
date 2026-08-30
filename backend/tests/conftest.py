@@ -105,9 +105,8 @@ def sync_db_session() -> Generator[Session, None, None]:
 
 
 def bot_headers(telegram_id: int, username: str | None = None) -> dict[str, str]:
-    """Credentials identical to the ones the real bot sends: the shared
-    internal secret plus the Telegram identity it is acting for. Endpoints
-    are per-user now, so every request needs to say who it is."""
+    """The credentials the real bot sends: the internal secret plus the
+    Telegram identity it acts for."""
     headers = {
         "X-Internal-Token": settings.internal_api_token,
         "X-Telegram-Id": str(telegram_id),

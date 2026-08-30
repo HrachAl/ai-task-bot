@@ -42,8 +42,7 @@ class TestConcurrentUserCreationAsync:
 class TestConcurrentUserCreationSync:
     def test_concurrent_worker_jobs_for_a_new_telegram_id_resolve_to_one_user(self):
         telegram_id = 900_000_002
-        # A session factory of this test's own, pointed at the test database
-        # — the worker's global SyncSessionLocal is bound to the app's real
+        # The worker's global SyncSessionLocal is bound to the app's real
         # DATABASE_URL, which the suite must never write to.
         engine = create_engine(TEST_DATABASE_URL_SYNC)
         session_factory = sessionmaker(bind=engine)

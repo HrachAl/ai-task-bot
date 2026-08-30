@@ -34,9 +34,8 @@ export function useTasks() {
     void refresh()
   }, [refresh])
 
-  /** Insert-or-replace by id — the single merge point for both API
-   * responses and incoming WebSocket events, so a task can never appear
-   * twice regardless of which source updates it. */
+  /** Insert-or-replace by id: the single merge point for API responses and
+   * WebSocket events, so a task can never appear twice. */
   const upsertTask = useCallback((task: Task) => {
     setTasks((current) => {
       const index = current.findIndex((item) => item.id === task.id)
@@ -61,10 +60,8 @@ export function useTasks() {
     })
   }, [])
 
-  /** Drop a card that no longer exists — used both by the delete mutation's
-   * optimistic update and by a task_deleted event from another client (the
-   * bot, or another tab). Removing an id that's already gone is a no-op, so
-   * the echo of our own delete changes nothing. */
+  /** Drop a card that no longer exists. Removing an id that is already gone
+   * is a no-op, so a task_deleted echo of our own delete changes nothing. */
   const dropTask = useCallback((id: number) => {
     setTasks((current) => current.filter((task) => task.id !== id))
   }, [])

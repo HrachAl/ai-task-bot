@@ -20,10 +20,9 @@ logger = logging.getLogger(__name__)
 
 MAX_TASK_TITLE_LENGTH = 500
 
-# Mirrors app.bot.handlers.STATUS_LABELS so the voice confirmation offers the
-# same status-choice keyboard as a text-created task. Duplicated rather than
-# imported: that module is aiogram-specific (bot process), while this is
-# rendered by the worker's plain-HTTP Telegram client as raw JSON.
+# Mirrors app.bot.handlers.STATUS_LABELS. Duplicated rather than imported:
+# that module is aiogram-specific, while this is rendered by the worker's
+# plain-HTTP Telegram client as raw JSON.
 _STATUS_BUTTONS = [
     ("pending", "⏳ Pending"),
     ("in_progress", "🔧 In Progress"),
@@ -75,14 +74,12 @@ def process_voice_message(
     try:
         publish_task_event_sync("task_created", task)
     except Exception:
-        # Belt-and-suspenders on top of publish_task_event_sync's own safety
-        # net: a task already committed to PostgreSQL must not be undone by
-        # a broken realtime layer.
+        # A task already committed to PostgreSQL must not be undone by a
+        # broken realtime layer.
         logger.exception("Realtime event publish failed for task %s (task_created)", task.id)
 
     # Local import: app.worker.tasks imports process_voice_message at module
-    # scope, so importing notify_telegram_task back at module scope here
-    # would be circular.
+    # scope, so importing it back here would be circular.
     from app.worker.tasks import notify_telegram_task
 
     try:

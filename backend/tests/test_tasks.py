@@ -21,8 +21,7 @@ class TestTaskCreation:
         assert body["user_id"] > 0
 
     async def test_create_task_creates_user_lazily(self, client: AsyncClient):
-        """First contact from a Telegram id creates the account; the second
-        task lands on the same one."""
+        """First contact creates the account; the second task lands on it."""
         first = await create_task(client, title="First")
         second = await create_task(client, title="Second")
 
@@ -37,8 +36,8 @@ class TestTaskCreation:
         assert response.status_code == 422
 
     async def test_owner_is_never_taken_from_the_request_body(self, client: AsyncClient):
-        """A caller cannot plant a task on someone else's board by naming a
-        different owner — the body's identity fields are ignored entirely."""
+        """A caller cannot plant a task on another board by naming a
+        different owner: identity fields in the body are ignored."""
         body = await create_task(client, title="Not yours", telegram_id=999, user_id=999)
 
         me = await client.get("/api/me")
@@ -165,8 +164,7 @@ class TestInvalidTaskStatus:
 
 
 class TestTaskIsolationBetweenUsers:
-    """Each Telegram account gets its own board. These are the tests that
-    actually pin that down — everything above runs as a single user."""
+    """Everything above runs as a single user; these pin down the boundary."""
 
     async def test_list_only_returns_your_own_tasks(self, client: AsyncClient):
         await create_task(client, title="Mine")

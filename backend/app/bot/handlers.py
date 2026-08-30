@@ -20,19 +20,14 @@ STATUS_LABELS = {
     "completed": "✅ Completed",
 }
 
-# How many tasks /list shows. Telegram caps how big an inline keyboard can
-# usefully get, and a longer list stops being scannable on a phone anyway —
-# the dashboard is the right place for the full board.
+# A longer list stops being scannable on a phone; the dashboard is the right
+# place for the full board.
 LIST_LIMIT = 20
 BUTTON_TITLE_LIMIT = 32
 
 
 def _actor(event: Message | CallbackQuery) -> dict:
-    """Who this update is from, in the shape the backend client expects.
-
-    Telegram identity is the only identity in this project — there is no
-    login — so every backend call carries it.
-    """
+    """Who this update is from, in the shape the backend client expects."""
     return {"telegram_id": event.from_user.id, "username": event.from_user.username}
 
 
@@ -62,10 +57,9 @@ def _format_created_at(raw: str | None) -> str:
 
 
 def _task_view(task: dict) -> tuple[str, InlineKeyboardMarkup]:
-    """Render one opened task: its details plus the buttons that change its
-    status. This is the same view whether it was reached from /list or from
-    the confirmation message right after creation, so changing a status
-    always looks and behaves the same way."""
+    """One opened task: details plus the buttons that act on it. Reached
+    either from /list or from the confirmation message a task was created
+    with, so both paths behave identically."""
     status = task.get("status", "pending")
     lines = [f"📌 {task['title']}"]
     if task.get("description"):
@@ -78,8 +72,7 @@ def _task_view(task: dict) -> tuple[str, InlineKeyboardMarkup]:
         f"Task #{task['id']}",
     ]
 
-    # The current status is marked rather than hidden, so the row of buttons
-    # doubles as an indicator of where the task stands.
+    # Marking the current status lets the button row double as an indicator.
     status_row = [
         InlineKeyboardButton(
             text=("• " + label) if value == status else label,
@@ -100,9 +93,8 @@ def _task_view(task: dict) -> tuple[str, InlineKeyboardMarkup]:
 
 
 def _delete_confirm_view(task: dict) -> tuple[str, InlineKeyboardMarkup]:
-    """Deleting is the one irreversible thing the bot can do, and inline
-    buttons sit right under the message where a mis-tap is easy — so it asks
-    first instead of acting on the first tap."""
+    """Deleting is irreversible and the buttons sit under the message where a
+    mis-tap is easy, so the first tap only asks."""
     text = (
         f"🗑 Delete this task?\n\n"
         f"“{_shorten(task['title'], 120)}”\n\n"
@@ -146,13 +138,13 @@ def _list_view(tasks: list[dict]) -> tuple[str, InlineKeyboardMarkup]:
 async def _render(
     callback: CallbackQuery, text: str, keyboard: InlineKeyboardMarkup | None = None
 ) -> None:
-    """Edit the message in place instead of piling up new ones — the bot
-    behaves like a small app with screens, not a chat log."""
+    """Edit in place instead of piling up messages, so the chat behaves like
+    a small app with screens."""
     try:
         await callback.message.edit_text(text, reply_markup=keyboard)
     except Exception:
-        # Telegram rejects an edit that changes nothing (e.g. re-selecting
-        # the status a task already has). Nothing is wrong; just move on.
+        # Telegram rejects an edit that changes nothing, e.g. re-selecting the
+        # status a task already has.
         logger.debug("Message edit skipped (unchanged content)", exc_info=True)
 
 
@@ -183,11 +175,10 @@ async def handle_help(message: Message) -> None:
 
 @router.message(Command("dashboard"))
 async def handle_dashboard(message: Message) -> None:
-    """Hand the user a link that logs them straight into their own board.
+    """Hand the user a link that opens their own board.
 
-    This is the whole 'registration' flow: the link carries a personal token
-    tied to this Telegram account, so there is no sign-up form and no
-    password, but every person still gets a separate dashboard.
+    This is the entire sign-in flow: the link carries a token tied to this
+    Telegram account, so there is no form and no password.
     """
     try:
         me = await get_backend_client().get_me(**_actor(message))
@@ -367,9 +358,8 @@ async def handle_status_choice(callback: CallbackQuery) -> None:
         return
 
     await callback.answer(f"Status set to {STATUS_LABELS[status_value]}")
-    # Redraw as the full task view: after a change from the creation
-    # confirmation the message becomes an openable task like any other, and
-    # after a change from /list it simply refreshes in place.
+    # Redraw as the full task view, so a status set from the creation
+    # confirmation lands on the same screen as one set from /list.
     await _render(callback, *_task_view(task))
 
 

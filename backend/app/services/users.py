@@ -6,8 +6,7 @@ from app.models import User
 
 
 async def get_user_by_access_token(db: AsyncSession, token: str) -> User | None:
-    """Resolve a dashboard caller from their personal token. Returns None on
-    an unknown token — the caller turns that into a 401."""
+    """Resolve a dashboard caller from their token; None if unknown."""
     if not token:
         return None
     result = await db.execute(select(User).where(User.access_token == token))

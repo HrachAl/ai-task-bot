@@ -48,9 +48,8 @@ class TestTaskUpdatePublishesEvent:
 
 
 class TestTaskDeletionPublishesEvent:
-    """Deletion has to be announced too, now that a task can be removed from
-    the bot as well as the dashboard — an open board would otherwise keep
-    showing a card that no longer exists."""
+    """A task can be removed from the bot as well as the dashboard, so an
+    open board has to hear about it."""
 
     async def test_delete_task_publishes_task_deleted(
         self, client: AsyncClient, fake_publish
@@ -71,8 +70,8 @@ class TestTaskDeletionPublishesEvent:
     async def test_the_event_still_names_the_owner_to_route_to(
         self, client: AsyncClient, fake_publish
     ):
-        """The payload is read after the row is gone, so it has to be a
-        snapshot — including user_id, which is the realtime routing key."""
+        """The payload is read after the row is gone, so it must be a
+        snapshot, including the user_id used for routing."""
         created = (await client.post("/api/tasks", json={"title": "Temporary"})).json()
         fake_publish.reset_mock()
 

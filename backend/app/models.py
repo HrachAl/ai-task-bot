@@ -7,9 +7,8 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db import Base
 
+# 192 bits: unguessable, and short enough to sit in a link.
 ACCESS_TOKEN_BYTES = 24
-"""Entropy behind a user's personal dashboard token — 192 bits, unguessable
-by brute force, and short enough to sit in a Telegram deep link."""
 
 
 def generate_access_token() -> str:
@@ -28,10 +27,8 @@ class User(Base):
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
     telegram_id: Mapped[int] = mapped_column(BigInteger, unique=True, index=True, nullable=False)
     username: Mapped[str | None] = mapped_column(String(64), nullable=True)
-    # The user's private dashboard key. There is no registration and no
-    # password: the Telegram account *is* the identity, and this token is
-    # what the bot hands out as a one-click link. Unique + indexed because
-    # every dashboard request resolves the caller by looking it up here.
+    # The user's private dashboard key, handed out by the bot as a link.
+    # Indexed because every dashboard request resolves the caller through it.
     access_token: Mapped[str] = mapped_column(
         String(64), unique=True, index=True, nullable=False, default=generate_access_token
     )

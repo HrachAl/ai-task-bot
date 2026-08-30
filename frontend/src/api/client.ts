@@ -22,8 +22,6 @@ function extractMessage(body: ApiErrorBody | undefined, fallback: string): strin
  * about the API's base path. Every request is relative (`/api/...`) so the
  * same code works behind Vite's dev proxy and behind nginx in production. */
 export async function apiRequest<T>(path: string, init?: RequestInit): Promise<T> {
-  // Every request identifies the caller with their personal dashboard
-  // token, which is what makes each board private.
   const token = getToken()
 
   let response: Response

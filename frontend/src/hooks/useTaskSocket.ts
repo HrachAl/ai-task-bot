@@ -7,18 +7,17 @@ const MAX_RECONNECT_DELAY_MS = 15000
 
 function wsUrl(): string {
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-  // A browser can't set headers on a WebSocket handshake, so the token goes
-  // in the query string — the server only ever streams this user's events.
+  // Browsers can't set headers on a handshake, so the token goes in the
+  // query string.
   const token = getToken()
   const query = token ? `?token=${encodeURIComponent(token)}` : ''
   return `${protocol}//${window.location.host}/ws/tasks${query}`
 }
 
 /** Keeps a WebSocket connection to /ws/tasks alive, reconnecting with
- * exponential backoff on drop. task_created/task_updated events go to
- * `onTask`, which is expected to upsert-by-id so events can never produce a
- * duplicate card; task_deleted events go to `onTaskDeleted`. Both are
- * idempotent, so an echo of a change this client made itself is harmless. */
+ * exponential backoff. Created/updated events go to `onTask` (upsert-by-id),
+ * deletions to `onTaskDeleted`. Both are idempotent, so the echo of a change
+ * this client made itself is harmless. */
 export function useTaskSocket(
   onTask: (task: Task) => void,
   onTaskDeleted: (id: number) => void,

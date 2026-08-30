@@ -10,11 +10,10 @@ router = APIRouter(prefix="/api", tags=["users"])
 
 @router.get("/me", response_model=MeRead)
 async def read_me(current_user: User = Depends(get_current_user)) -> MeRead:
-    """Who am I, and what is my personal dashboard link?
+    """The caller's account and personal dashboard link.
 
-    The bot calls this to build the /dashboard message; the dashboard calls
-    it on load to check its stored token is still valid before rendering the
-    board.
+    The bot uses it to build the /dashboard reply; the dashboard uses it to
+    check its stored token is still valid before rendering the board.
     """
     settings = get_settings()
     base = settings.dashboard_base_url.rstrip("/")

@@ -1,5 +1,4 @@
-/** The signed-in user, as returned by GET /api/me. Identity comes from
- * Telegram — there is no separate account to create. */
+/** The signed-in user, as returned by GET /api/me. */
 export interface Me {
   id: number
   telegram_id: number

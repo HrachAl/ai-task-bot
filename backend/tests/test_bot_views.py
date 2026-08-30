@@ -1,9 +1,5 @@
-"""Rendering of the bot's task screens.
-
-/list and the task view are the bot-side half of "change a status from
-inside the task": everything a user taps is generated here, so these are the
-pieces worth pinning down without a live Telegram connection.
-"""
+"""Rendering of the bot's task screens: everything a user taps is generated
+here, so it can be pinned down without a live Telegram connection."""
 
 from app.bot.handlers import (
     BUTTON_TITLE_LIMIT,
@@ -66,8 +62,7 @@ class TestTaskView:
 
 
 class TestDeleteConfirmView:
-    """Deleting is irreversible and the buttons sit under the message where a
-    mis-tap is easy, so the first tap only asks."""
+    """The first tap only asks; deleting is irreversible."""
 
     def test_asks_before_deleting(self):
         text, keyboard = _delete_confirm_view(make_task())
@@ -89,8 +84,8 @@ class TestDeleteConfirmView:
         assert keyboard.inline_keyboard[0][1].callback_data == "open:7"
 
     def test_the_ask_prefix_is_not_mistaken_for_the_confirm_prefix(self):
-        """`askdel:` must not match the `del:` handler, or the first tap
-        would delete the task outright."""
+        """`askdel:` must not match the `del:` handler, or the first tap would
+        delete outright."""
         assert not "askdel:7".startswith("del:")
 
 

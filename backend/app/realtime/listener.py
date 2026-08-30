@@ -26,19 +26,14 @@ logger = logging.getLogger(__name__)
 subscribed_event = threading.Event()
 
 
+# Matches no user (real ids are positive). An event whose owner can't be
+# determined goes to nobody rather than to everybody — the affected dashboard
+# re-syncs on refresh, which beats leaking a task across accounts.
 NO_RECIPIENT = -1
-"""Routing key that matches no user (real ids are positive). An event whose
-owner we can't determine is delivered to nobody rather than to everybody:
-the affected dashboard re-syncs on its next refresh, which is a far better
-failure mode than leaking one account's task into another's tab."""
 
 
 def _owner_of(raw: str) -> int:
-    """Which user's board does this event belong to?
-
-    Every payload we publish carries the task's `user_id` — it is the routing
-    key that keeps one account's events out of another account's tabs.
-    """
+    """The `user_id` an event routes to, taken from its payload."""
     try:
         return int(json.loads(raw)["task"]["user_id"])
     except (ValueError, TypeError, KeyError):

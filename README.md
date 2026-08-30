@@ -1,10 +1,10 @@
 # AI Task Bot
 
 An omni-channel task manager: send a text or voice message to a Telegram bot and it
-shows up instantly — Kanban-style — on a web dashboard. Voice messages are transcribed
-asynchronously by Whisper via a Celery worker so the bot never blocks waiting on
-OpenAI. Status changes made on the dashboard (including drag-and-drop) sync back to
-every connected browser over WebSocket in real time.
+shows up instantly on a Kanban dashboard. Voice messages are transcribed
+asynchronously by Whisper via a Celery worker, so the bot never blocks waiting on
+OpenAI. Every Telegram account gets its own private board, and changes made on either
+side — the bot or the dashboard — sync to the other over WebSocket in real time.
 
 ```
 Telegram text  → FastAPI → PostgreSQL ─────────────────────┐
@@ -14,9 +14,10 @@ Telegram voice → FastAPI → Redis/Celery → Worker → Whisper ─┘
 ```
 
 This is an internship technical assessment. The scope is intentionally a small,
-polished MVP — not an enterprise project-management clone. There is no auth system,
-no roles, no labels/priorities/subtasks/attachments, and no notification center by
-design (see [PLAN.md](PLAN.md) for the full architecture rationale).
+polished MVP rather than an enterprise project-management clone: no roles, labels,
+priorities, subtasks, attachments, or notification center. Access control is
+deliberately minimal too — a per-user token handed out by the bot, not an account
+system (see [PLAN.md](PLAN.md) for the architecture rationale).
 
 ## Architecture
 
@@ -54,46 +55,44 @@ No `Task` row exists until transcription actually succeeds — a failed or empty
 transcription never leaves partial data behind, and the bot edits its own "🎤
 transcribing…" placeholder message with the final result (or a clear failure notice).
 
-Both the text and voice confirmations also attach an inline keyboard (Pending / In
-Progress / Completed). Tapping a button calls the same `PATCH /api/tasks/{id}` the
-dashboard's drag-and-drop uses, so the status change shows up on the board in real
-time without leaving Telegram.
+Both the text and voice confirmations attach an inline keyboard (Pending / In Progress
+/ Completed). Tapping a button calls the same `PATCH /api/tasks/{id}` that the
+dashboard's drag-and-drop uses, so the status change reaches the board without leaving
+Telegram.
 
-### Browsing and editing tasks from Telegram
+### Managing tasks from Telegram
 `/list` returns the caller's tasks as a tappable list. Opening one shows its details
-(title, description, status, id, creation time) with the status keyboard attached, a
-delete button, and a "back" button — so a task can be managed from *inside* itself,
-not only from the confirmation message it was created with. The bot edits one message
-in place rather than appending new ones, so the chat behaves like a small app with
-screens.
+(title, description, status, id, creation time) with the status buttons attached, a
+delete button, and a way back, so a task can be managed from inside itself rather than
+only from the message it was created with. The bot edits one message in place instead
+of appending new ones, so the chat behaves like a small app with screens.
 
-Deleting asks for confirmation first: it is the one irreversible action the bot
-offers, and inline buttons sit right under the message where a mis-tap is easy.
-Because a task can now be removed from either side, deletion is announced on the
-realtime channel as `task_deleted` — a board open in a browser drops the card
-immediately instead of showing something that no longer exists.
+Deleting asks for confirmation first — it is the one irreversible action the bot
+offers, and inline buttons sit directly under the message. Since a task can be removed
+from either side, deletion is published on the realtime channel as `task_deleted`, and
+an open board drops the card immediately.
 
 ### Per-user boards
-Every Telegram account gets its own private board, with no registration form and no
-password: the Telegram account **is** the identity. Each `users` row carries a random
+Each Telegram account gets its own board, with no registration form and no password:
+the Telegram account is the identity. Every `users` row carries a random
 `access_token`, and `/dashboard` replies with a personal link
 (`https://<dashboard>/?token=…`). The browser stores that token, strips it from the
-address bar, and sends it as `Authorization: Bearer …` on every request (and as a
-`?token=` query parameter on the WebSocket handshake, which can't carry headers).
+address bar, and sends it as `Authorization: Bearer …` on every request — and as a
+`?token=` query parameter on the WebSocket handshake, which cannot carry headers.
 
-Two consequences worth naming:
+Two properties follow from that:
 
 - **Scoping is enforced server-side, in one place.** No endpoint reads an owner id
   from the request body; it always comes from the caller's credentials. A task
-  belonging to someone else returns `404`, not `403` — a `403` would confirm that the
-  id exists on another board.
-- **The realtime channel is scoped too.** Each WebSocket remembers which user opened
-  it, and the Redis listener routes each event by the `user_id` in its payload, so an
-  event can only reach the account it belongs to.
+  belonging to someone else returns `404` rather than `403`, since a `403` would
+  confirm that the id exists on another board.
+- **The realtime channel is scoped the same way.** Each WebSocket records the user
+  that opened it, and the Redis listener routes events by the `user_id` in the
+  payload.
 
-The bot itself has no personal token. It authenticates as a trusted internal service
-(`X-Internal-Token`) and names the Telegram user it is acting for (`X-Telegram-Id`),
-which the backend resolves — creating the account on first contact.
+The bot holds no personal token. It authenticates as an internal service
+(`X-Internal-Token`) and names the Telegram user it acts for (`X-Telegram-Id`), which
+the backend resolves, creating the account on first contact.
 
 ## Technology stack
 
@@ -139,25 +138,27 @@ language runtimes run inside containers.
 
 ```bash
 cp .env.example .env
-# edit .env: add TELEGRAM_BOT_TOKEN and OPENAI_API_KEY to use the bot for real
-# (see "Telegram bot" / "OpenAI / Whisper" below — the rest of the app works without them)
+# add TELEGRAM_BOT_TOKEN and OPENAI_API_KEY to use the bot for real; the REST API,
+# dashboard, and WebSocket all work without them (see "Telegram bot" below)
 
 docker compose up --build
 ```
+
+Then open the dashboard: it will ask you to connect Telegram. Send `/dashboard` to
+your bot and follow the link it replies with.
 
 - Dashboard: **http://localhost:3001**
 - API docs (Swagger UI): **http://localhost:8001/docs**
 - Health check: **http://localhost:8001/api/health**
 
-(Port `8001` is only the **host-side** port — inside the Docker network, `backend`
-still listens on `8000`; only its published port on the host was moved, e.g. to avoid
-clashing with something else already running on port 8000 on the host machine.)
+(`8001` and `3001` are host-side ports only; inside the Docker network `backend` still
+listens on `8000` and nginx on `80`. They were moved to avoid clashing with whatever
+else is already running on the host.)
 
-The dashboard loads the full task list via `GET /api/tasks` on first paint, then a
-WebSocket connection (`/ws/tasks`, proxied by nginx) keeps it in sync live — no
-polling, no manual refresh needed. A small colored dot in the header shows connection
-status (green = live, amber = reconnecting), and the client reconnects automatically
-with exponential backoff if the connection drops.
+The dashboard loads the task list via `GET /api/tasks` on first paint, then a
+WebSocket connection (`/ws/tasks`, proxied by nginx) keeps it in sync — no polling, no
+manual refresh. A colored dot in the header shows connection status (green = live,
+amber = reconnecting), and the client reconnects with exponential backoff on drop.
 
 ## Environment variables
 
@@ -175,8 +176,8 @@ full annotated list). The important ones:
 | `OPENAI_API_KEY` | Required for real transcription |
 | `WHISPER_MODEL` / `WHISPER_LANGUAGE` | Defaults to `whisper-1`, auto-detect language |
 | `BACKEND_INTERNAL_URL` | How the `bot` container reaches `backend` (`http://backend:8000` inside Docker) |
-| `INTERNAL_API_TOKEN` | Shared secret that lets the bot call the API on behalf of a Telegram user. Bot and backend read the same value, so the default works as-is on the private Docker network |
-| `DASHBOARD_BASE_URL` | Public URL of the dashboard. The bot builds each user's personal `/dashboard` link from it — set it to the address people actually open |
+| `INTERNAL_API_TOKEN` | Shared secret that lets the bot act on behalf of a Telegram user. The `.env.example` value is a local-development placeholder — **generate a real one before deploying** (see "Deploying") |
+| `DASHBOARD_BASE_URL` | Public URL of the dashboard; the bot builds each `/dashboard` link from it |
 | `CORS_ORIGINS` | Only matters if you run the frontend dev server separately from nginx (see below) |
 
 Without `TELEGRAM_BOT_TOKEN` / `OPENAI_API_KEY`, everything **except the bot itself**
@@ -281,33 +282,32 @@ rather than silently lost (the standard at-least-once tradeoff for a task queue;
 
 ## How real-time updates work
 
-- `backend` holds a `ConnectionManager` (`backend/app/realtime/manager.py`) — a plain
-  set of live WebSocket connections at `/ws/tasks`. It broadcasts to all of them and
-  silently drops any connection that fails to receive (client already gone) — no
-  crash, no reconnection storm.
+- `backend` holds a `ConnectionManager` (`backend/app/realtime/manager.py`): the live
+  WebSocket connections at `/ws/tasks`, each stored with the id of the user that
+  opened it. A connection that fails to receive (client already gone) is dropped
+  rather than breaking the broadcast for everyone else.
 - A background task in `backend`'s lifespan subscribes to a Redis pub/sub channel and
-  re-broadcasts every message it receives to `ConnectionManager`. **Both** the
-  request-handling code (text creation, `PATCH` status updates) and the separate
-  Celery worker (finished transcriptions) publish to this same channel — this is the
-  only reason a worker in another process can push updates into someone's browser.
-- Every publish path is wrapped so a Redis hiccup can **never** fail the request that
-  already committed to Postgres — the realtime layer is a convenience, not a
-  dependency, exactly as the spec requires ("WebSocket is only responsible for
-  real-time synchronization").
-- On the frontend, `useTaskSocket` reconnects with exponential backoff (1s → 15s) on
-  drop, and re-syncs the task list on every successful reconnect. Incoming events are
-  merged by **upsert-by-id** (`useTasks.upsertTask`) — replace if the id is already in
-  the list, prepend otherwise — so a duplicate or out-of-order event can never produce
-  a duplicate card, and the same merge path handles both a REST response and a
-  WebSocket echo of that same change identically.
+  re-broadcasts each message through `ConnectionManager`, routed by the `user_id` in
+  the payload so an event only reaches the account it belongs to. Both the
+  request-handling code (text creation, status updates, deletions) and the separate
+  Celery worker (finished transcriptions) publish to this channel — the only reason a
+  worker in another process can push updates into someone's browser.
+- Every publish path is wrapped so a Redis hiccup cannot fail a request that already
+  committed to Postgres. The realtime layer is a convenience, not a dependency — the
+  WebSocket is only responsible for synchronization.
+- On the frontend, `useTaskSocket` reconnects with exponential backoff (1s → 15s) and
+  re-syncs the task list on every successful reconnect. Incoming events are merged by
+  upsert-by-id (`useTasks.upsertTask`): replace if the id is present, prepend
+  otherwise. A duplicate or out-of-order event therefore cannot produce a duplicate
+  card, and a REST response and a WebSocket echo of the same change take the same
+  path.
 
 ## Drag-and-drop and status updates
 
 Dragging a card to another column (`@dnd-kit`) updates local state **optimistically**,
 then calls `PATCH /api/tasks/{id}`. If that request fails, the board reverts to the
-pre-drag snapshot and a toast explains what happened — verified with a headless
-browser test that force-fails the `PATCH` call and confirms both the rollback and the
-toast.
+pre-drag snapshot and a toast explains what happened; verified with a headless browser
+test that force-fails the `PATCH` call and checks both the rollback and the toast.
 
 ## How to test the application
 
@@ -365,16 +365,42 @@ docker compose up --build
    Message the bot from a second Telegram account and confirm its tasks never appear
    on the first account's board (nor on its live WebSocket).
 
+## Deploying
+
+Beyond `TELEGRAM_BOT_TOKEN` and `OPENAI_API_KEY`, two variables must be set for any
+deployment that is reachable from outside `localhost`:
+
+```dotenv
+# Where users actually open the dashboard. The bot builds each /dashboard link
+# from this, so a stale value produces links that go nowhere.
+DASHBOARD_BASE_URL=https://your-domain.example
+
+# Generate a fresh one: openssl rand -hex 24
+INTERNAL_API_TOKEN=<random>
+```
+
+`INTERNAL_API_TOKEN` is the one that matters for security. It lets its holder act on
+behalf of any Telegram user, and nginx serves `/api` on the same origin as the
+dashboard — so it is exposed wherever the dashboard is, not only on the Docker
+network. Leaving it at the `.env.example` placeholder in a public deployment is
+equivalent to leaving every board open.
+
+Only the `frontend` port needs to be published; nginx proxies `/api` and `/ws` to
+`backend` inside the Docker network. Behind a reverse proxy, forward the host and the
+WebSocket upgrade headers — for Caddy, a plain `reverse_proxy` does both.
+
 ## Known limitations (explicit scope decisions)
 
-- **Token auth, not full account management.** Access is a single bearer token per
-  user, handed out by the bot. There is deliberately no password, no email, no
-  session expiry and no token rotation endpoint — the assessment scoped out complex
-  authentication, and Telegram already owns the identity. The token is the whole
-  credential, so anyone the link is forwarded to has the same access; a production
-  system would add rotation and revocation. The bot's internal secret assumes the API
-  is reachable only from the private Docker network, so don't publish port 8001
-  directly without changing `INTERNAL_API_TOKEN` from its default.
+- **Token access, not account management.** Access is one bearer token per user,
+  handed out by the bot. There is deliberately no password, no email, no session
+  expiry and no rotation endpoint: complex authentication was scoped out, and Telegram
+  already owns the identity. The token is the whole credential, so anyone the link is
+  forwarded to has the same access. A production system would add rotation and
+  revocation.
+- **`INTERNAL_API_TOKEN` must be changed before deploying.** It lets its holder act as
+  any Telegram user, and nginx proxies `/api` alongside the dashboard, so it is
+  reachable wherever the dashboard is. The value in `.env.example` is a placeholder
+  for local development — see "Deploying" above.
 - **At-least-once voice processing.** `task_acks_late=True` means a worker crashing
   in the narrow window between committing a task and acknowledging the message could
   cause that voice message to be processed twice on redelivery. This is the standard,

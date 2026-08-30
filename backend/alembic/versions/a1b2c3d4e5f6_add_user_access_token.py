@@ -19,9 +19,8 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    # Added nullable first so existing rows survive, then backfilled with a
-    # per-row random value, then locked down to NOT NULL + UNIQUE. Doing it
-    # in one step would fail on any database that already has users.
+    # Nullable first so existing rows survive, then backfilled, then locked
+    # down: a single step would fail on any database that already has users.
     op.add_column('users', sa.Column('access_token', sa.String(length=64), nullable=True))
     op.execute(
         "UPDATE users SET access_token = "

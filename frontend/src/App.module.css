@@ -51,8 +51,7 @@
   }
 }
 
-/* Shown while the session (which user is this?) is still resolving, before
-   the board itself is allowed to fetch anything. */
+/* Shown while the session is still resolving. */
 .bootScreen {
   min-height: 100vh;
   display: flex;

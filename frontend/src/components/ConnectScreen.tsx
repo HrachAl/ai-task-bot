@@ -2,18 +2,14 @@ import buttons from '../styles/buttons.module.css'
 import styles from './ConnectScreen.module.css'
 
 interface ConnectScreenProps {
-  /** 'invalid' means we had a token and the server rejected it — worth
-   * saying out loud, otherwise the screen looks like the user did nothing
-   * wrong and the link silently failed. */
+  /** 'invalid' means a token was present and rejected; worth saying, or the
+   * link looks like it failed silently. */
   reason: 'missing' | 'invalid'
   onRetry: () => void
 }
 
-/** Shown when the browser has no valid dashboard token.
- *
- * There is no login form here on purpose: accounts live in Telegram, and the
- * bot is the only thing that can hand out a board link.
- */
+/** Shown when the browser has no valid dashboard token. There is no login
+ * form: the bot is the only thing that hands out a board link. */
 export function ConnectScreen({ reason, onRetry }: ConnectScreenProps) {
   return (
     <div className={styles.screen}>

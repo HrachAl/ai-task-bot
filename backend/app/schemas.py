@@ -16,25 +16,16 @@ class UserRead(BaseModel):
 
 
 class MeRead(UserRead):
-    """The authenticated user, as returned by GET /api/me.
-
-    Includes ``access_token`` because the caller already proved they hold
-    it — the bot uses this endpoint to build the user's personal dashboard
-    link, and the dashboard uses it to confirm the token is still valid.
-    """
+    """The authenticated user. Includes ``access_token`` because the caller
+    already proved they hold it, and the bot needs it to build the link."""
 
     access_token: str
     dashboard_url: str
 
 
 class TaskCreate(BaseModel):
-    """Payload for creating a task.
-
-    The owner is never taken from the body — it is resolved from the
-    caller's credentials (a dashboard bearer token, or the bot acting on
-    behalf of a Telegram user), so one user can't create tasks on another
-    user's board.
-    """
+    """Payload for creating a task. The owner is resolved from the caller's
+    credentials, never from the body."""
 
     title: str = Field(min_length=1, max_length=500)
     description: str | None = Field(default=None, max_length=5000)
@@ -67,10 +58,9 @@ class TaskUpdate(BaseModel):
 class VoiceTaskCreate(BaseModel):
     """Payload the bot sends to enqueue a voice message for transcription.
 
-    No Task row is created yet at this point — only once the worker has a
-    transcript. This endpoint's only job is to hand the file reference off
-    to Celery/Redis without blocking the Telegram handler. The owning user
-    comes from the caller's credentials, not from this payload.
+    No Task row exists yet: the worker creates one once it has a transcript.
+    This only hands the file reference to Celery without blocking the
+    Telegram handler.
     """
 
     telegram_file_id: str = Field(min_length=1)

@@ -1,19 +1,10 @@
 """Request authentication.
 
-There is no registration form and no password anywhere in this project: a
-user's Telegram account *is* their identity. Every user row carries a random
-``access_token``, and the bot hands it to them as a one-click dashboard link.
-
-Two kinds of caller are accepted:
-
-* the **dashboard**, which sends ``Authorization: Bearer <access_token>``;
-* the **bot**, a trusted internal service on the private Docker network,
-  which sends ``X-Internal-Token`` plus the ``X-Telegram-Id`` of the person
-  it is acting for (creating that user on first contact).
-
-Everything downstream works with the resolved ``User``, so no endpoint ever
-takes an owner id from the request body — that is what keeps one user's board
-invisible to another.
+Two kinds of caller are accepted: the dashboard, with
+``Authorization: Bearer <access_token>``, and the bot, a trusted internal
+service sending ``X-Internal-Token`` plus the ``X-Telegram-Id`` it acts for.
+Both resolve to a ``User``, so no endpoint takes an owner id from the request
+body.
 """
 
 import logging
@@ -61,8 +52,8 @@ async def _user_from_internal_headers(db: AsyncSession, headers) -> User | None:
     user = await get_or_create_user(
         db, telegram_id=telegram_id, username=headers.get("X-Telegram-Username") or None
     )
-    # First contact creates the row (and its access token) — commit so the
-    # token is durable even if the request itself later fails.
+    # First contact creates the row and its access token; commit so the token
+    # survives even if the request itself later fails.
     await db.commit()
     await db.refresh(user)
     return user
@@ -89,9 +80,8 @@ async def get_ws_user(
 ) -> User | None:
     """WebSocket counterpart of `get_current_user`.
 
-    Browsers can't set headers on a WebSocket handshake, so the token travels
-    as a query parameter instead. Returns None rather than raising: the
-    endpoint closes the socket with a policy-violation code, which is what a
-    WebSocket client can actually observe.
+    Browsers can't set headers on a handshake, so the token travels as a query
+    parameter. Returns None rather than raising — the endpoint closes the
+    socket with a status code the client can actually observe.
     """
     return await get_user_by_access_token(db, token)

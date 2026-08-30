@@ -6,7 +6,7 @@ import type { Me } from '../types'
 
 export type SessionState =
   | { status: 'loading' }
-  /** No token yet (or it was rejected) — the user needs a fresh link from the bot. */
+  /** No token yet, or it was rejected: the user needs a link from the bot. */
   | { status: 'anonymous'; reason: 'missing' | 'invalid' }
   | { status: 'authenticated'; user: Me }
   /** The token may be fine; we just couldn't reach the API. */
@@ -14,10 +14,9 @@ export type SessionState =
 
 /** Resolves who is looking at the dashboard.
  *
- * The token arrives once, as `?token=` in the link the bot sends, and is
- * then remembered per browser. It is verified against GET /api/me on every
- * load so a revoked or mistyped token shows the "connect" screen instead of
- * an empty board that looks like data loss.
+ * The token is verified against GET /api/me on every load, so a bad token
+ * shows the connect screen rather than an empty board that looks like data
+ * loss.
  */
 export function useSession() {
   const [state, setState] = useState<SessionState>({ status: 'loading' })

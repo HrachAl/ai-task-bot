@@ -95,9 +95,8 @@ class TestUpdateTaskStatus:
 
 
 class TestActingOnBehalfOfAUser:
-    """The bot has no personal token of its own: it proves it is the trusted
-    internal service and names the Telegram user it is acting for. Every call
-    must carry that, or the backend has no way to pick the right board."""
+    """The bot has no personal token: every call must name the internal
+    secret and the user it acts for, or the backend can't pick a board."""
 
     async def test_every_request_carries_the_internal_credentials(self):
         seen: dict[str, str] = {}
@@ -168,8 +167,8 @@ class TestGetMe:
 
 class TestDeleteTask:
     async def test_a_204_with_no_body_is_not_treated_as_an_error(self):
-        """DELETE answers 204 with an empty body — parsing it as JSON would
-        blow up on an otherwise successful delete."""
+        """Parsing an empty 204 body as JSON would fail an otherwise
+        successful delete."""
 
         def handler(request: httpx.Request) -> httpx.Response:
             assert request.method == "DELETE"

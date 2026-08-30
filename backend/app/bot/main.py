@@ -22,8 +22,7 @@ async def main() -> None:
     dp.callback_query.middleware(ErrorHandlingMiddleware())
     dp.include_router(router)
 
-    # Shows the commands in Telegram's "/" menu, so /list and /dashboard are
-    # discoverable without reading /help.
+    # Populates Telegram's "/" menu so the commands are discoverable.
     await bot.set_my_commands(
         [
             BotCommand(command="list", description="Show my tasks and change their status"),

@@ -1,8 +1,5 @@
-"""The listener's addressing logic: which user an incoming Redis event is for.
-
-This is the single place that decides who a realtime event reaches, so it
-gets tested on its own rather than only through the WebSocket endpoint.
-"""
+"""Which user an incoming Redis event is addressed to. The single place that
+decides who a realtime event reaches, so it is tested on its own."""
 
 import json
 

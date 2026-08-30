@@ -1,9 +1,8 @@
-"""Tracks live WebSocket connections and fans a message out to all of them.
+"""Tracks live WebSocket connections and fans messages out to them.
 
-Deliberately holds no history/state beyond the live socket set — WebSocket is
-a synchronization channel, not storage. PostgreSQL remains the source of
-truth; a client that missed events (e.g. was offline) re-syncs by re-fetching
-GET /api/tasks, not by replaying anything from here.
+Holds no history beyond the live socket set: WebSocket is a synchronization
+channel, not storage. A client that missed events re-syncs through
+GET /api/tasks.
 """
 
 import logging
@@ -14,9 +13,8 @@ logger = logging.getLogger(__name__)
 
 
 class ConnectionManager:
-    """Every socket is remembered together with the id of the user it
-    belongs to, so a task event can be delivered to that user's open tabs
-    only. Boards are private; a broadcast must never cross accounts."""
+    """Each socket is stored with the id of the user it belongs to, so an
+    event reaches that user's tabs only. Boards are private."""
 
     def __init__(self) -> None:
         self._connections: dict[WebSocket, int | None] = {}
@@ -33,10 +31,9 @@ class ConnectionManager:
         logger.info("WebSocket disconnected (%d total)", len(self._connections))
 
     async def broadcast(self, message: str, *, user_id: int | None = None) -> None:
-        """Send to the sockets of one user, or — when `user_id` is None — to
-        every connected client. A client that fails to receive (already gone,
-        network blip) is dropped instead of breaking the broadcast for
-        everyone else."""
+        """Send to one user's sockets, or to every client when `user_id` is
+        None. A socket that fails to receive is dropped rather than breaking
+        the broadcast for everyone else."""
         dead: list[WebSocket] = []
         for connection, owner_id in list(self._connections.items()):
             if user_id is not None and owner_id != user_id:

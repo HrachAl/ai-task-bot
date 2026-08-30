@@ -22,8 +22,7 @@ CONNECTING_USER_ID = 1
 @pytest.fixture(autouse=True)
 def ws_identity():
     """Stands in for the token lookup so these tests stay about the realtime
-    path, not about the database. Mutate `.user_id` to open the next socket
-    as somebody else."""
+    path. Mutate `.user_id` to open the next socket as somebody else."""
     holder = SimpleNamespace(user_id=CONNECTING_USER_ID)
     app.dependency_overrides[get_ws_user] = lambda: SimpleNamespace(id=holder.user_id)
     yield holder
@@ -85,8 +84,7 @@ class TestWebSocketConnection:
 
 class TestWebSocketIsPerUser:
     def test_a_socket_only_receives_its_own_users_events(self, ws_identity):
-        """The realtime channel is scoped the same way the REST API is: an
-        event for someone else's task must never reach this socket."""
+        """The realtime channel is scoped the same way the REST API is."""
         with TestClient(app) as test_client:
             assert subscribed_event.wait(timeout=2), "listener never subscribed"
             with test_client.websocket_connect("/ws/tasks") as mine:
