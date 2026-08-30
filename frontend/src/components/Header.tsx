@@ -1,5 +1,5 @@
 import type { Theme } from '../hooks/useTheme'
-import type { ConnectionStatus } from '../types'
+import type { ConnectionStatus, Me } from '../types'
 import styles from './Header.module.css'
 
 interface HeaderProps {
@@ -9,6 +9,8 @@ interface HeaderProps {
   isRefreshing: boolean
   theme: Theme
   onToggleTheme: () => void
+  user: Me
+  onSignOut: () => void
 }
 
 export function Header({
@@ -18,6 +20,8 @@ export function Header({
   isRefreshing,
   theme,
   onToggleTheme,
+  user,
+  onSignOut,
 }: HeaderProps) {
   return (
     <header className={styles.header}>
@@ -63,12 +67,34 @@ export function Header({
           <RefreshIcon spinning={isRefreshing} />
         </button>
 
-        <div className={styles.userArea} aria-hidden="true">
-          <span className={styles.avatar}>U</span>
+        <div className={styles.userArea}>
+          <span className={styles.avatar} title={displayName(user)}>
+            {initial(user)}
+          </span>
+          <span className={styles.userName}>{displayName(user)}</span>
+          <button
+            type="button"
+            className={styles.iconButton}
+            onClick={onSignOut}
+            aria-label="Sign out of this browser"
+            title="Sign out of this browser"
+          >
+            <SignOutIcon />
+          </button>
         </div>
       </div>
     </header>
   )
+}
+
+/** Telegram usernames are optional, so fall back to the numeric id — it is
+ * still the person's own identity, just less friendly. */
+function displayName(user: Me): string {
+  return user.username ? `@${user.username}` : `id ${user.telegram_id}`
+}
+
+function initial(user: Me): string {
+  return (user.username?.[0] ?? String(user.telegram_id)[0] ?? 'U').toUpperCase()
 }
 
 const STATUS_TEXT: Record<ConnectionStatus, string> = {
@@ -119,6 +145,26 @@ function MoonIcon() {
         d="M13.5 9.8A5.7 5.7 0 0 1 6.2 2.5a5.7 5.7 0 1 0 7.3 7.3Z"
         stroke="currentColor"
         strokeWidth="1.4"
+        strokeLinejoin="round"
+      />
+    </svg>
+  )
+}
+
+function SignOutIcon() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+      <path
+        d="M6.2 2.5H3.6A1.1 1.1 0 0 0 2.5 3.6v8.8a1.1 1.1 0 0 0 1.1 1.1h2.6"
+        stroke="currentColor"
+        strokeWidth="1.4"
+        strokeLinecap="round"
+      />
+      <path
+        d="M10.4 10.8 13.5 8l-3.1-2.8M13.2 8H6.4"
+        stroke="currentColor"
+        strokeWidth="1.4"
+        strokeLinecap="round"
         strokeLinejoin="round"
       />
     </svg>

@@ -59,6 +59,35 @@ Progress / Completed). Tapping a button calls the same `PATCH /api/tasks/{id}` t
 dashboard's drag-and-drop uses, so the status change shows up on the board in real
 time without leaving Telegram.
 
+### Browsing and editing tasks from Telegram
+`/list` returns the caller's tasks as a tappable list. Opening one shows its details
+(title, description, status, id, creation time) with the status keyboard attached and
+a "back" button — so a status can be changed from *inside* a task, not only from the
+confirmation message it was created with. The bot edits one message in place rather
+than appending new ones, so the chat behaves like a small app with screens.
+
+### Per-user boards
+Every Telegram account gets its own private board, with no registration form and no
+password: the Telegram account **is** the identity. Each `users` row carries a random
+`access_token`, and `/dashboard` replies with a personal link
+(`https://<dashboard>/?token=…`). The browser stores that token, strips it from the
+address bar, and sends it as `Authorization: Bearer …` on every request (and as a
+`?token=` query parameter on the WebSocket handshake, which can't carry headers).
+
+Two consequences worth naming:
+
+- **Scoping is enforced server-side, in one place.** No endpoint reads an owner id
+  from the request body; it always comes from the caller's credentials. A task
+  belonging to someone else returns `404`, not `403` — a `403` would confirm that the
+  id exists on another board.
+- **The realtime channel is scoped too.** Each WebSocket remembers which user opened
+  it, and the Redis listener routes each event by the `user_id` in its payload, so an
+  event can only reach the account it belongs to.
+
+The bot itself has no personal token. It authenticates as a trusted internal service
+(`X-Internal-Token`) and names the Telegram user it is acting for (`X-Telegram-Id`),
+which the backend resolves — creating the account on first contact.
+
 ## Technology stack
 
 **Backend** — Python 3.12, FastAPI, SQLAlchemy 2.x (async), Alembic, Pydantic v2,
@@ -82,7 +111,7 @@ backend/
     realtime/     WebSocket ConnectionManager + the Redis pub/sub listener
     models.py, schemas.py, db.py / db_sync.py, config.py, exceptions.py
   alembic/         one migration: initial schema (users, tasks)
-  tests/           95 tests — see "How to test" below
+  tests/           141 tests — see "How to test" below
 frontend/
   src/
     api/           tiny fetch-based client (client.ts, tasks.ts)
@@ -139,6 +168,8 @@ full annotated list). The important ones:
 | `OPENAI_API_KEY` | Required for real transcription |
 | `WHISPER_MODEL` / `WHISPER_LANGUAGE` | Defaults to `whisper-1`, auto-detect language |
 | `BACKEND_INTERNAL_URL` | How the `bot` container reaches `backend` (`http://backend:8000` inside Docker) |
+| `INTERNAL_API_TOKEN` | Shared secret that lets the bot call the API on behalf of a Telegram user. Bot and backend read the same value, so the default works as-is on the private Docker network |
+| `DASHBOARD_BASE_URL` | Public URL of the dashboard. The bot builds each user's personal `/dashboard` link from it — set it to the address people actually open |
 | `CORS_ORIGINS` | Only matters if you run the frontend dev server separately from nginx (see below) |
 
 Without `TELEGRAM_BOT_TOKEN` / `OPENAI_API_KEY`, everything **except the bot itself**
@@ -273,7 +304,7 @@ toast.
 
 ## How to test the application
 
-**Backend** — 95 tests (`pytest`), no mocking of the database — a real Postgres
+**Backend** — 141 tests (`pytest`), no mocking of the database — a real Postgres
 (a `*_test` database) with each test isolated in a rolled-back transaction/savepoint.
 Covers: task CRUD + validation, the voice pipeline's success/failure paths (download
 failure, invalid audio, transcription failure, empty transcript) with a fake
@@ -320,12 +351,22 @@ docker compose up --build
 5. Open a second browser tab — create a task in one, watch it appear live in the
    other.
 6. Click a card → change its status or delete it from the detail panel.
+7. Send `/list` to the bot → tap a task → change its status from inside it; watch the
+   card move on the board at the same time.
+8. Send `/dashboard` → open the link in a private window → only your own tasks load.
+   Message the bot from a second Telegram account and confirm its tasks never appear
+   on the first account's board (nor on its live WebSocket).
 
 ## Known limitations (explicit scope decisions)
 
-- **No authentication.** Per the assessment's explicit scope, there's no auth layer.
-  `POST /api/tasks` and `POST /api/tasks/voice` are open — trusted callers only
-  (the bot and the dashboard). Don't expose port 8001 to the public internet as-is.
+- **Token auth, not full account management.** Access is a single bearer token per
+  user, handed out by the bot. There is deliberately no password, no email, no
+  session expiry and no token rotation endpoint — the assessment scoped out complex
+  authentication, and Telegram already owns the identity. The token is the whole
+  credential, so anyone the link is forwarded to has the same access; a production
+  system would add rotation and revocation. The bot's internal secret assumes the API
+  is reachable only from the private Docker network, so don't publish port 8001
+  directly without changing `INTERNAL_API_TOKEN` from its default.
 - **At-least-once voice processing.** `task_acks_late=True` means a worker crashing
   in the narrow window between committing a task and acknowledging the message could
   cause that voice message to be processed twice on redelivery. This is the standard,

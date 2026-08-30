@@ -7,13 +7,13 @@ that pattern is for isolation/speed, not for reproducing a genuine race.
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
 
-from sqlalchemy import text
+from sqlalchemy import create_engine, text
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+from sqlalchemy.orm import sessionmaker
 
-from app.db_sync import SyncSessionLocal
 from app.services.sync_repo import get_or_create_user_sync
 from app.services.users import get_or_create_user
-from tests.conftest import TEST_DATABASE_URL
+from tests.conftest import TEST_DATABASE_URL, TEST_DATABASE_URL_SYNC
 
 
 class TestConcurrentUserCreationAsync:
@@ -42,9 +42,14 @@ class TestConcurrentUserCreationAsync:
 class TestConcurrentUserCreationSync:
     def test_concurrent_worker_jobs_for_a_new_telegram_id_resolve_to_one_user(self):
         telegram_id = 900_000_002
+        # A session factory of this test's own, pointed at the test database
+        # — the worker's global SyncSessionLocal is bound to the app's real
+        # DATABASE_URL, which the suite must never write to.
+        engine = create_engine(TEST_DATABASE_URL_SYNC)
+        session_factory = sessionmaker(bind=engine)
 
         def create_one() -> int:
-            with SyncSessionLocal() as db:
+            with session_factory() as db:
                 user = get_or_create_user_sync(db, telegram_id=telegram_id)
                 db.commit()
                 return user.id
@@ -54,6 +59,7 @@ class TestConcurrentUserCreationSync:
                 results = list(pool.map(lambda _: create_one(), range(5)))
             assert len(set(results)) == 1, f"expected one user id, got {results}"
         finally:
-            with SyncSessionLocal() as db:
+            with session_factory() as db:
                 db.execute(text("DELETE FROM users WHERE telegram_id = :tid"), {"tid": telegram_id})
                 db.commit()
+            engine.dispose()

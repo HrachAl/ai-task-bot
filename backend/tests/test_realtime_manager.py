@@ -68,3 +68,42 @@ class TestConnectionManagerBroadcast:
     async def test_broadcast_with_no_clients_does_not_raise(self):
         manager = ConnectionManager()
         await manager.broadcast("hello")  # should simply be a no-op
+
+
+class TestConnectionManagerIsPerUser:
+    """Boards are private, so the fan-out has to be addressed: an event is
+    delivered to the sockets of one user, never to everyone connected."""
+
+    async def test_only_the_owners_sockets_receive_the_event(self):
+        manager = ConnectionManager()
+        mine, my_other_tab, theirs = FakeWebSocket(), FakeWebSocket(), FakeWebSocket()
+        await manager.connect(mine, user_id=1)
+        await manager.connect(my_other_tab, user_id=1)
+        await manager.connect(theirs, user_id=2)
+
+        await manager.broadcast("event-for-1", user_id=1)
+
+        assert mine.sent == ["event-for-1"]
+        assert my_other_tab.sent == ["event-for-1"]
+        assert theirs.sent == []
+
+    async def test_an_event_for_nobody_reaches_nobody(self):
+        manager = ConnectionManager()
+        ws = FakeWebSocket()
+        await manager.connect(ws, user_id=1)
+
+        await manager.broadcast("unroutable", user_id=-1)
+
+        assert ws.sent == []
+
+    async def test_a_dead_socket_is_pruned_during_a_targeted_broadcast(self):
+        manager = ConnectionManager()
+        alive = FakeWebSocket()
+        dead = FakeWebSocket(fail_on_send=True)
+        await manager.connect(alive, user_id=1)
+        await manager.connect(dead, user_id=1)
+
+        await manager.broadcast("hello", user_id=1)
+
+        assert alive.sent == ["hello"]
+        assert manager.connection_count == 1

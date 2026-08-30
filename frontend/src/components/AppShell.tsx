@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 import type { Theme } from '../hooks/useTheme'
-import type { ConnectionStatus } from '../types'
+import type { ConnectionStatus, Me } from '../types'
 import { Header } from './Header'
 import { ToastContainer } from './ToastContainer'
 import styles from './AppShell.module.css'
@@ -12,6 +12,8 @@ interface AppShellProps {
   isRefreshing: boolean
   theme: Theme
   onToggleTheme: () => void
+  user: Me
+  onSignOut: () => void
   children: ReactNode
 }
 
@@ -22,6 +24,8 @@ export function AppShell({
   isRefreshing,
   theme,
   onToggleTheme,
+  user,
+  onSignOut,
   children,
 }: AppShellProps) {
   return (
@@ -33,6 +37,8 @@ export function AppShell({
         isRefreshing={isRefreshing}
         theme={theme}
         onToggleTheme={onToggleTheme}
+        user={user}
+        onSignOut={onSignOut}
       />
       <main className={styles.main}>{children}</main>
       <ToastContainer />

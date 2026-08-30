@@ -15,24 +15,27 @@ class UserRead(BaseModel):
     updated_at: datetime
 
 
-DASHBOARD_TELEGRAM_ID = 0
-"""Sentinel telegram_id for tasks created from the web dashboard, which has
-no Telegram identity of its own. Reserved — real Telegram user ids are always
-positive, so this can never collide with an actual bot user."""
+class MeRead(UserRead):
+    """The authenticated user, as returned by GET /api/me.
+
+    Includes ``access_token`` because the caller already proved they hold
+    it — the bot uses this endpoint to build the user's personal dashboard
+    link, and the dashboard uses it to confirm the token is still valid.
+    """
+
+    access_token: str
+    dashboard_url: str
 
 
 class TaskCreate(BaseModel):
     """Payload for creating a task.
 
-    ``telegram_id`` identifies (and lazily creates) the owning user. There is
-    no auth layer yet, so the caller is trusted to supply the correct
-    identity — this is how the Telegram bot calls this endpoint. It's
-    optional because the web dashboard has no Telegram identity and simply
-    omits it, falling back to a reserved dashboard user.
+    The owner is never taken from the body — it is resolved from the
+    caller's credentials (a dashboard bearer token, or the bot acting on
+    behalf of a Telegram user), so one user can't create tasks on another
+    user's board.
     """
 
-    telegram_id: int = DASHBOARD_TELEGRAM_ID
-    username: str | None = Field(default=None, max_length=64)
     title: str = Field(min_length=1, max_length=500)
     description: str | None = Field(default=None, max_length=5000)
     status: TaskStatus = TaskStatus.PENDING
@@ -66,11 +69,10 @@ class VoiceTaskCreate(BaseModel):
 
     No Task row is created yet at this point — only once the worker has a
     transcript. This endpoint's only job is to hand the file reference off
-    to Celery/Redis without blocking the Telegram handler.
+    to Celery/Redis without blocking the Telegram handler. The owning user
+    comes from the caller's credentials, not from this payload.
     """
 
-    telegram_id: int
-    username: str | None = Field(default=None, max_length=64)
     telegram_file_id: str = Field(min_length=1)
     chat_id: int
     ack_message_id: int | None = None

@@ -1,12 +1,11 @@
 import pytest
 from httpx import AsyncClient
 
+from tests.conftest import bot_headers
 
-async def create_task(
-    client: AsyncClient, *, telegram_id: int = 1, title: str = "Buy milk", **extra
-) -> dict:
-    payload = {"telegram_id": telegram_id, "title": title, **extra}
-    response = await client.post("/api/tasks", json=payload)
+
+async def create_task(client: AsyncClient, *, title: str = "Buy milk", **extra) -> dict:
+    response = await client.post("/api/tasks", json={"title": title, **extra})
     assert response.status_code == 201, response.text
     return response.json()
 
@@ -22,27 +21,28 @@ class TestTaskCreation:
         assert body["user_id"] > 0
 
     async def test_create_task_creates_user_lazily(self, client: AsyncClient):
-        first = await create_task(client, telegram_id=42, title="First")
-        second = await create_task(client, telegram_id=42, title="Second")
+        """First contact from a Telegram id creates the account; the second
+        task lands on the same one."""
+        first = await create_task(client, title="First")
+        second = await create_task(client, title="Second")
 
         assert first["user_id"] == second["user_id"]
 
     async def test_create_task_without_title_is_rejected(self, client: AsyncClient):
-        response = await client.post("/api/tasks", json={"telegram_id": 1, "title": ""})
+        response = await client.post("/api/tasks", json={"title": ""})
         assert response.status_code == 422
 
     async def test_create_task_with_blank_title_is_rejected(self, client: AsyncClient):
-        response = await client.post("/api/tasks", json={"telegram_id": 1, "title": "   "})
+        response = await client.post("/api/tasks", json={"title": "   "})
         assert response.status_code == 422
 
-    async def test_create_task_without_telegram_id_uses_dashboard_user(
-        self, client: AsyncClient
-    ):
-        """The web dashboard has no Telegram identity — omitting telegram_id
-        must fall back to the reserved dashboard user, not fail."""
-        response = await client.post("/api/tasks", json={"title": "Buy milk"})
-        assert response.status_code == 201
-        assert response.json()["title"] == "Buy milk"
+    async def test_owner_is_never_taken_from_the_request_body(self, client: AsyncClient):
+        """A caller cannot plant a task on someone else's board by naming a
+        different owner — the body's identity fields are ignored entirely."""
+        body = await create_task(client, title="Not yours", telegram_id=999, user_id=999)
+
+        me = await client.get("/api/me")
+        assert body["user_id"] == me.json()["id"]
 
     async def test_create_task_accepts_explicit_status(self, client: AsyncClient):
         body = await create_task(client, title="Done already", status="completed")
@@ -145,7 +145,7 @@ class TestTaskDeletion:
 class TestInvalidTaskStatus:
     async def test_create_task_with_invalid_status_returns_422(self, client: AsyncClient):
         response = await client.post(
-            "/api/tasks", json={"telegram_id": 1, "title": "Bad status", "status": "bogus"}
+            "/api/tasks", json={"title": "Bad status", "status": "bogus"}
         )
         assert response.status_code == 422
 
@@ -162,3 +162,50 @@ class TestInvalidTaskStatus:
         )
         assert response.status_code == 200
         assert response.json()["status"] == valid_status
+
+
+class TestTaskIsolationBetweenUsers:
+    """Each Telegram account gets its own board. These are the tests that
+    actually pin that down — everything above runs as a single user."""
+
+    async def test_list_only_returns_your_own_tasks(self, client: AsyncClient):
+        await create_task(client, title="Mine")
+        await client.post(
+            "/api/tasks", json={"title": "Theirs"}, headers=bot_headers(777)
+        )
+
+        mine = await client.get("/api/tasks")
+        theirs = await client.get("/api/tasks", headers=bot_headers(777))
+
+        assert [task["title"] for task in mine.json()] == ["Mine"]
+        assert [task["title"] for task in theirs.json()] == ["Theirs"]
+
+    async def test_another_users_task_reads_as_not_found(self, client: AsyncClient):
+        created = await create_task(client, title="Private")
+
+        response = await client.get(f"/api/tasks/{created['id']}", headers=bot_headers(778))
+
+        assert response.status_code == 404
+
+    async def test_another_user_cannot_change_your_task(self, client: AsyncClient):
+        created = await create_task(client, title="Private")
+
+        response = await client.patch(
+            f"/api/tasks/{created['id']}",
+            json={"status": "completed"},
+            headers=bot_headers(779),
+        )
+
+        assert response.status_code == 404
+        still_mine = await client.get(f"/api/tasks/{created['id']}")
+        assert still_mine.json()["status"] == "pending"
+
+    async def test_another_user_cannot_delete_your_task(self, client: AsyncClient):
+        created = await create_task(client, title="Private")
+
+        response = await client.delete(
+            f"/api/tasks/{created['id']}", headers=bot_headers(780)
+        )
+
+        assert response.status_code == 404
+        assert (await client.get(f"/api/tasks/{created['id']}")).status_code == 200

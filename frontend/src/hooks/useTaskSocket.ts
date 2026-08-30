@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { getToken } from '../auth'
 import type { ConnectionStatus, Task, TaskEvent } from '../types'
 
 const INITIAL_RECONNECT_DELAY_MS = 1000
@@ -6,7 +7,11 @@ const MAX_RECONNECT_DELAY_MS = 15000
 
 function wsUrl(): string {
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-  return `${protocol}//${window.location.host}/ws/tasks`
+  // A browser can't set headers on a WebSocket handshake, so the token goes
+  // in the query string — the server only ever streams this user's events.
+  const token = getToken()
+  const query = token ? `?token=${encodeURIComponent(token)}` : ''
+  return `${protocol}//${window.location.host}/ws/tasks${query}`
 }
 
 /** Keeps a WebSocket connection to /ws/tasks alive, reconnecting with

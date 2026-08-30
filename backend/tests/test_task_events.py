@@ -20,7 +20,7 @@ def fake_publish(monkeypatch):
 class TestTaskCreationPublishesEvent:
     async def test_create_task_publishes_task_created(self, client: AsyncClient, fake_publish):
         response = await client.post(
-            "/api/tasks", json={"telegram_id": 1, "title": "Buy milk"}
+            "/api/tasks", json={"title": "Buy milk"}
         )
         assert response.status_code == 201
 
@@ -33,7 +33,7 @@ class TestTaskCreationPublishesEvent:
 class TestTaskUpdatePublishesEvent:
     async def test_update_task_publishes_task_updated(self, client: AsyncClient, fake_publish):
         create_response = await client.post(
-            "/api/tasks", json={"telegram_id": 1, "title": "Buy milk"}
+            "/api/tasks", json={"title": "Buy milk"}
         )
         task_id = create_response.json()["id"]
         fake_publish.reset_mock()
@@ -57,7 +57,7 @@ class TestPublishTaskEventNeverRaises:
         fake_publish.side_effect = RuntimeError("redis exploded")
 
         response = await client.post(
-            "/api/tasks", json={"telegram_id": 1, "title": "Should still work"}
+            "/api/tasks", json={"title": "Should still work"}
         )
 
         assert response.status_code == 201

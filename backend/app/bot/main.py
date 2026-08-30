@@ -2,6 +2,7 @@ import asyncio
 import logging
 
 from aiogram import Bot, Dispatcher
+from aiogram.types import BotCommand
 
 from app.bot.handlers import router
 from app.bot.middleware import ErrorHandlingMiddleware
@@ -20,6 +21,16 @@ async def main() -> None:
     dp.message.middleware(ErrorHandlingMiddleware())
     dp.callback_query.middleware(ErrorHandlingMiddleware())
     dp.include_router(router)
+
+    # Shows the commands in Telegram's "/" menu, so /list and /dashboard are
+    # discoverable without reading /help.
+    await bot.set_my_commands(
+        [
+            BotCommand(command="list", description="Show my tasks and change their status"),
+            BotCommand(command="dashboard", description="Open my private web board"),
+            BotCommand(command="help", description="What I can do"),
+        ]
+    )
 
     await bot.delete_webhook(drop_pending_updates=True)
     logger.info("Starting bot polling...")

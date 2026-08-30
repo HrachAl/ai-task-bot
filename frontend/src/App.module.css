@@ -50,3 +50,35 @@
     align-self: flex-start;
   }
 }
+
+/* Shown while the session (which user is this?) is still resolving, before
+   the board itself is allowed to fetch anything. */
+.bootScreen {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-4);
+  background: var(--color-bg);
+}
+
+.bootSpinner {
+  width: 26px;
+  height: 26px;
+  border-radius: var(--radius-full);
+  border: 2.5px solid var(--color-border-strong);
+  border-top-color: var(--color-primary);
+  animation: bootSpin 700ms linear infinite;
+}
+
+.bootText {
+  font-size: 13.5px;
+  color: var(--color-text-muted);
+}
+
+@keyframes bootSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}

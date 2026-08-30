@@ -10,7 +10,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from app.api import health, tasks, ws
+from app.api import health, tasks, users, ws
 from app.core.config import get_settings
 from app.exceptions import TaskNotFoundError
 from app.realtime.listener import redis_listener
@@ -44,6 +44,7 @@ app.add_middleware(
 
 app.include_router(health.router)
 app.include_router(tasks.router)
+app.include_router(users.router)
 app.include_router(ws.router)
 
 

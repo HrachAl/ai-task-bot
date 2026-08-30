@@ -5,6 +5,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models import User
 
 
+async def get_user_by_access_token(db: AsyncSession, token: str) -> User | None:
+    """Resolve a dashboard caller from their personal token. Returns None on
+    an unknown token — the caller turns that into a 401."""
+    if not token:
+        return None
+    result = await db.execute(select(User).where(User.access_token == token))
+    return result.scalar_one_or_none()
+
+
 async def get_or_create_user(
     db: AsyncSession, *, telegram_id: int, username: str | None = None
 ) -> User:
