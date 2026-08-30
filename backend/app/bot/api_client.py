@@ -73,6 +73,9 @@ class BackendClient:
             "PATCH", f"/api/tasks/{task_id}", telegram_id, username, json={"status": status}
         )
 
+    async def delete_task(self, *, telegram_id: int, username: str | None, task_id: int) -> None:
+        await self._request("DELETE", f"/api/tasks/{task_id}", telegram_id, username)
+
     async def get_me(self, *, telegram_id: int, username: str | None) -> dict:
         return await self._request("GET", "/api/me", telegram_id, username)
 
@@ -99,6 +102,9 @@ class BackendClient:
             raise BackendError(
                 f"Backend returned {response.status_code} for {path}: {response.text[:200]}"
             )
+        # A successful DELETE answers 204 with no body — nothing to parse.
+        if response.status_code == 204 or not response.content:
+            return None
         return response.json()
 
 

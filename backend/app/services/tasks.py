@@ -5,13 +5,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.exceptions import TaskNotFoundError
 from app.models import Task, TaskStatus, User
-from app.schemas import TaskCreate, TaskUpdate
+from app.schemas import TaskCreate, TaskRead, TaskUpdate
 from app.services.events import publish_task_event
 
 logger = logging.getLogger(__name__)
 
 
-async def _publish_safely(event_type: str, task: Task) -> None:
+async def _publish_safely(event_type: str, task: Task | TaskRead) -> None:
     """A task that was already committed to PostgreSQL must never be failed
     by a broken realtime layer — belt-and-suspenders on top of
     publish_task_event's own internal safety net."""
@@ -75,5 +75,10 @@ async def update_task(
 
 async def delete_task(db: AsyncSession, task_id: int, *, owner: User) -> None:
     task = await get_task(db, task_id, owner=owner)
+    # Snapshot before the delete: once the row is gone the ORM object's
+    # attributes can no longer be read, and the event still has to say which
+    # task disappeared and whose board to remove it from.
+    deleted = TaskRead.model_validate(task)
     await db.delete(task)
     await db.commit()
+    await _publish_safely("task_deleted", deleted)

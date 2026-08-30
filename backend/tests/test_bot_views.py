@@ -8,6 +8,7 @@ pieces worth pinning down without a live Telegram connection.
 from app.bot.handlers import (
     BUTTON_TITLE_LIMIT,
     LIST_LIMIT,
+    _delete_confirm_view,
     _format_created_at,
     _list_view,
     _shorten,
@@ -58,9 +59,39 @@ class TestTaskView:
 
         assert marked == ["• 🔧 In Progress"]
 
-    def test_offers_a_way_back_to_the_list(self):
+    def test_offers_delete_and_a_way_back_to_the_list(self):
         _, keyboard = _task_view(make_task())
-        assert keyboard.inline_keyboard[-1][0].callback_data == "list"
+        actions = {b.callback_data for b in keyboard.inline_keyboard[-1]}
+        assert actions == {"askdel:7", "list"}
+
+
+class TestDeleteConfirmView:
+    """Deleting is irreversible and the buttons sit under the message where a
+    mis-tap is easy, so the first tap only asks."""
+
+    def test_asks_before_deleting(self):
+        text, keyboard = _delete_confirm_view(make_task())
+
+        assert "Delete this task?" in text
+        assert "can't be undone" in text
+        assert [b.callback_data for b in keyboard.inline_keyboard[0]] == [
+            "del:7",
+            "open:7",
+        ]
+
+    def test_quotes_the_task_being_deleted(self):
+        text, _ = _delete_confirm_view(make_task(title="Cancel the subscription"))
+        assert "Cancel the subscription" in text
+
+    def test_keeping_it_goes_back_to_the_task_not_the_list(self):
+        """The safe choice returns you exactly where you were."""
+        _, keyboard = _delete_confirm_view(make_task())
+        assert keyboard.inline_keyboard[0][1].callback_data == "open:7"
+
+    def test_the_ask_prefix_is_not_mistaken_for_the_confirm_prefix(self):
+        """`askdel:` must not match the `del:` handler, or the first tap
+        would delete the task outright."""
+        assert not "askdel:7".startswith("del:")
 
 
 class TestListView:

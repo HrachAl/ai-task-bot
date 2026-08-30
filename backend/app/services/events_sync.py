@@ -23,7 +23,7 @@ def _get_redis_sync() -> redis_sync.Redis:
     return _redis_sync
 
 
-def publish_task_event_sync(event_type: str, task: Task) -> None:
+def publish_task_event_sync(event_type: str, task: Task | TaskRead) -> None:
     """Never raises: a task that was already committed to PostgreSQL must
     not fail the worker job just because the realtime notification failed
     (serialization, Redis unreachable, or anything else)."""

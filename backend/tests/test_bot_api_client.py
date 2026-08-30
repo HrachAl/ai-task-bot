@@ -164,3 +164,25 @@ class TestGetMe:
         client = make_client(handler)
         result = await client.get_me(telegram_id=1, username=None)
         assert result["dashboard_url"] == "http://board/?token=abc"
+
+
+class TestDeleteTask:
+    async def test_a_204_with_no_body_is_not_treated_as_an_error(self):
+        """DELETE answers 204 with an empty body — parsing it as JSON would
+        blow up on an otherwise successful delete."""
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            assert request.method == "DELETE"
+            assert request.url.path == "/api/tasks/9"
+            return httpx.Response(204)
+
+        client = make_client(handler)
+        assert await client.delete_task(telegram_id=1, username=None, task_id=9) is None
+
+    async def test_deleting_someone_elses_task_raises_backend_error(self):
+        def handler(request: httpx.Request) -> httpx.Response:
+            return httpx.Response(404, json={"detail": "Task 9 not found"})
+
+        client = make_client(handler)
+        with pytest.raises(BackendError):
+            await client.delete_task(telegram_id=1, username=None, task_id=9)

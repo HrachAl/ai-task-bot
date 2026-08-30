@@ -61,6 +61,14 @@ export function useTasks() {
     })
   }, [])
 
+  /** Drop a card that no longer exists — used both by the delete mutation's
+   * optimistic update and by a task_deleted event from another client (the
+   * bot, or another tab). Removing an id that's already gone is a no-op, so
+   * the echo of our own delete changes nothing. */
+  const dropTask = useCallback((id: number) => {
+    setTasks((current) => current.filter((task) => task.id !== id))
+  }, [])
+
   const addTask = useCallback(
     async (input: TaskCreateInput): Promise<Task> => {
       const task = await createTask(input)
@@ -111,6 +119,7 @@ export function useTasks() {
     changeStatus,
     removeTask,
     upsertTask,
+    dropTask,
     newTaskIds,
     clearNewTask,
   }

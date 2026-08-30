@@ -61,10 +61,17 @@ time without leaving Telegram.
 
 ### Browsing and editing tasks from Telegram
 `/list` returns the caller's tasks as a tappable list. Opening one shows its details
-(title, description, status, id, creation time) with the status keyboard attached and
-a "back" button — so a status can be changed from *inside* a task, not only from the
-confirmation message it was created with. The bot edits one message in place rather
-than appending new ones, so the chat behaves like a small app with screens.
+(title, description, status, id, creation time) with the status keyboard attached, a
+delete button, and a "back" button — so a task can be managed from *inside* itself,
+not only from the confirmation message it was created with. The bot edits one message
+in place rather than appending new ones, so the chat behaves like a small app with
+screens.
+
+Deleting asks for confirmation first: it is the one irreversible action the bot
+offers, and inline buttons sit right under the message where a mis-tap is easy.
+Because a task can now be removed from either side, deletion is announced on the
+realtime channel as `task_deleted` — a board open in a browser drops the card
+immediately instead of showing something that no longer exists.
 
 ### Per-user boards
 Every Telegram account gets its own private board, with no registration form and no
@@ -111,7 +118,7 @@ backend/
     realtime/     WebSocket ConnectionManager + the Redis pub/sub listener
     models.py, schemas.py, db.py / db_sync.py, config.py, exceptions.py
   alembic/         one migration: initial schema (users, tasks)
-  tests/           141 tests — see "How to test" below
+  tests/           149 tests — see "How to test" below
 frontend/
   src/
     api/           tiny fetch-based client (client.ts, tasks.ts)
@@ -304,7 +311,7 @@ toast.
 
 ## How to test the application
 
-**Backend** — 141 tests (`pytest`), no mocking of the database — a real Postgres
+**Backend** — 149 tests (`pytest`), no mocking of the database — a real Postgres
 (a `*_test` database) with each test isolated in a rolled-back transaction/savepoint.
 Covers: task CRUD + validation, the voice pipeline's success/failure paths (download
 failure, invalid audio, transcription failure, empty transcript) with a fake
@@ -352,7 +359,8 @@ docker compose up --build
    other.
 6. Click a card → change its status or delete it from the detail panel.
 7. Send `/list` to the bot → tap a task → change its status from inside it; watch the
-   card move on the board at the same time.
+   card move on the board at the same time. Delete it from the bot → the card
+   disappears from the open board without a refresh.
 8. Send `/dashboard` → open the link in a private window → only your own tasks load.
    Message the bot from a second Telegram account and confirm its tasks never appear
    on the first account's board (nor on its live WebSocket).

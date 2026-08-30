@@ -90,10 +90,37 @@ def _task_view(task: dict) -> tuple[str, InlineKeyboardMarkup]:
     keyboard = InlineKeyboardMarkup(
         inline_keyboard=[
             status_row,
-            [InlineKeyboardButton(text="⬅️ Back to my tasks", callback_data="list")],
+            [
+                InlineKeyboardButton(text="🗑 Delete", callback_data=f"askdel:{task['id']}"),
+                InlineKeyboardButton(text="⬅️ Back to my tasks", callback_data="list"),
+            ],
         ]
     )
     return "\n".join(lines), keyboard
+
+
+def _delete_confirm_view(task: dict) -> tuple[str, InlineKeyboardMarkup]:
+    """Deleting is the one irreversible thing the bot can do, and inline
+    buttons sit right under the message where a mis-tap is easy — so it asks
+    first instead of acting on the first tap."""
+    text = (
+        f"🗑 Delete this task?\n\n"
+        f"“{_shorten(task['title'], 120)}”\n\n"
+        "This can't be undone."
+    )
+    keyboard = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="✅ Yes, delete", callback_data=f"del:{task['id']}"
+                ),
+                InlineKeyboardButton(
+                    text="↩️ Keep it", callback_data=f"open:{task['id']}"
+                ),
+            ]
+        ]
+    )
+    return text, keyboard
 
 
 def _list_view(tasks: list[dict]) -> tuple[str, InlineKeyboardMarkup]:
@@ -101,7 +128,7 @@ def _list_view(tasks: list[dict]) -> tuple[str, InlineKeyboardMarkup]:
     header = f"📋 Your tasks ({len(tasks)})"
     if len(tasks) > len(shown):
         header += f" — showing the {len(shown)} most recent"
-    header += "\n\nTap a task to open it and change its status."
+    header += "\n\nTap a task to open it, change its status, or delete it."
 
     rows = [
         [
@@ -146,7 +173,7 @@ async def handle_help(message: Message) -> None:
         "📋 I turn your messages into tasks.\n\n"
         "• Send plain text — it becomes a task right away.\n"
         "• Send a voice note — I'll transcribe it and add it as a task.\n"
-        "• /list — browse your tasks; tap one to open it and change its status.\n"
+        "• /list — browse your tasks; tap one to open it, change its status, or delete it.\n"
         "• /dashboard — a private link to your own Kanban board in the browser.\n\n"
         f"Voice notes must be under {settings.max_voice_duration_seconds // 60} minute(s) "
         f"and {settings.max_voice_file_mb} MB.\n\n"
@@ -286,6 +313,44 @@ async def handle_back_to_list(callback: CallbackQuery) -> None:
         await _render(callback, "📭 You don't have any tasks yet.")
         return
     await _render(callback, *_list_view(tasks))
+
+
+@router.callback_query(F.data.startswith("askdel:"))
+async def handle_delete_prompt(callback: CallbackQuery) -> None:
+    task_id = int(callback.data.split(":", 1)[1])
+
+    try:
+        task = await get_backend_client().get_task(**_actor(callback), task_id=task_id)
+    except BackendError:
+        logger.exception("Failed to load task_id=%s before deleting", task_id)
+        await callback.answer("⚠️ Couldn't open that task.", show_alert=True)
+        return
+
+    await callback.answer()
+    await _render(callback, *_delete_confirm_view(task))
+
+
+@router.callback_query(F.data.startswith("del:"))
+async def handle_delete_confirmed(callback: CallbackQuery) -> None:
+    task_id = int(callback.data.split(":", 1)[1])
+
+    try:
+        await get_backend_client().delete_task(**_actor(callback), task_id=task_id)
+    except BackendError:
+        logger.exception("Failed to delete task_id=%s", task_id)
+        await callback.answer("⚠️ Couldn't delete that task, try again.", show_alert=True)
+        return
+
+    await callback.answer("Task deleted")
+    await _render(
+        callback,
+        "🗑 Task deleted.",
+        InlineKeyboardMarkup(
+            inline_keyboard=[
+                [InlineKeyboardButton(text="⬅️ Back to my tasks", callback_data="list")]
+            ]
+        ),
+    )
 
 
 @router.callback_query(F.data.startswith("status:"))

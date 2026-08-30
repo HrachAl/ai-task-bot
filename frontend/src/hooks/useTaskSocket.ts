@@ -15,13 +15,19 @@ function wsUrl(): string {
 }
 
 /** Keeps a WebSocket connection to /ws/tasks alive, reconnecting with
- * exponential backoff on drop. Every task_created/task_updated event is
- * handed to `onTask`, which is expected to upsert-by-id so events can never
- * produce a duplicate card. */
-export function useTaskSocket(onTask: (task: Task) => void): ConnectionStatus {
+ * exponential backoff on drop. task_created/task_updated events go to
+ * `onTask`, which is expected to upsert-by-id so events can never produce a
+ * duplicate card; task_deleted events go to `onTaskDeleted`. Both are
+ * idempotent, so an echo of a change this client made itself is harmless. */
+export function useTaskSocket(
+  onTask: (task: Task) => void,
+  onTaskDeleted: (id: number) => void,
+): ConnectionStatus {
   const [status, setStatus] = useState<ConnectionStatus>('connecting')
   const onTaskRef = useRef(onTask)
   onTaskRef.current = onTask
+  const onTaskDeletedRef = useRef(onTaskDeleted)
+  onTaskDeletedRef.current = onTaskDeleted
 
   useEffect(() => {
     let socket: WebSocket | null = null
@@ -43,6 +49,8 @@ export function useTaskSocket(onTask: (task: Task) => void): ConnectionStatus {
           const parsed = JSON.parse(event.data as string) as TaskEvent
           if (parsed.type === 'task_created' || parsed.type === 'task_updated') {
             onTaskRef.current(parsed.task)
+          } else if (parsed.type === 'task_deleted') {
+            onTaskDeletedRef.current(parsed.task.id)
           }
         } catch {
           // Malformed frame — ignore rather than crash the UI.

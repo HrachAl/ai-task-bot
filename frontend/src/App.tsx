@@ -78,11 +78,12 @@ function Dashboard({ user, theme, onToggleTheme, onSignOut }: DashboardProps) {
     changeStatus,
     removeTask,
     upsertTask,
+    dropTask,
     newTaskIds,
     clearNewTask,
   } = useTasks()
   const { showToast } = useToasts()
-  const connectionStatus = useTaskSocket(upsertTask)
+  const connectionStatus = useTaskSocket(upsertTask, dropTask)
 
   const [isCreateOpen, setIsCreateOpen] = useState(false)
   const [selectedTaskId, setSelectedTaskId] = useState<number | null>(null)

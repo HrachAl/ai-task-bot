@@ -47,6 +47,41 @@ class TestTaskUpdatePublishesEvent:
         assert task.status.value == "completed"
 
 
+class TestTaskDeletionPublishesEvent:
+    """Deletion has to be announced too, now that a task can be removed from
+    the bot as well as the dashboard — an open board would otherwise keep
+    showing a card that no longer exists."""
+
+    async def test_delete_task_publishes_task_deleted(
+        self, client: AsyncClient, fake_publish
+    ):
+        create_response = await client.post("/api/tasks", json={"title": "Temporary"})
+        task_id = create_response.json()["id"]
+        fake_publish.reset_mock()
+
+        response = await client.delete(f"/api/tasks/{task_id}")
+        assert response.status_code == 204
+
+        fake_publish.assert_awaited_once()
+        event_type, task = fake_publish.await_args.args
+        assert event_type == "task_deleted"
+        assert task.id == task_id
+        assert task.title == "Temporary"
+
+    async def test_the_event_still_names_the_owner_to_route_to(
+        self, client: AsyncClient, fake_publish
+    ):
+        """The payload is read after the row is gone, so it has to be a
+        snapshot — including user_id, which is the realtime routing key."""
+        created = (await client.post("/api/tasks", json={"title": "Temporary"})).json()
+        fake_publish.reset_mock()
+
+        await client.delete(f"/api/tasks/{created['id']}")
+
+        _, task = fake_publish.await_args.args
+        assert task.user_id == created["user_id"]
+
+
 class TestPublishTaskEventNeverRaises:
     """A missed realtime notification must never fail a request that already
     committed to PostgreSQL — task creation must succeed regardless."""

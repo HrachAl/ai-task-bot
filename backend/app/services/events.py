@@ -28,7 +28,7 @@ def _get_redis() -> aioredis.Redis:
     return _redis
 
 
-async def publish_task_event(event_type: str, task: Task) -> None:
+async def publish_task_event(event_type: str, task: Task | TaskRead) -> None:
     """Never raises: a task that was already committed to PostgreSQL must
     not fail the request just because the realtime notification failed
     (serialization, Redis unreachable, or anything else)."""
