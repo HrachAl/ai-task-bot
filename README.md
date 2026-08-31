@@ -1,5 +1,7 @@
 # AI Task Bot
 
+[Русская версия](README.ru.md)
+
 An omni-channel task manager: send a text or voice message to a Telegram bot and it
 shows up instantly on a Kanban dashboard. Voice messages are transcribed
 asynchronously by Whisper via a Celery worker, so the bot never blocks waiting on
@@ -109,23 +111,24 @@ light/dark toggle in the header) — no state-management library, no CSS framewo
 ```
 backend/
   app/
-    api/          REST + WebSocket routes (tasks.py, ws.py, health.py)
+    api/          REST + WebSocket routes (tasks.py, users.py, ws.py, health.py, deps.py)
     bot/          aiogram handlers, input validation, backend HTTP client
-    worker/       Celery app + the transcribe_voice task
+    worker/       Celery app + the transcribe_voice and notify_telegram tasks
     services/     business logic (tasks, users, voice pipeline, realtime events)
     integrations/ Telegram Bot API client, Whisper transcriber (behind a Protocol)
     realtime/     WebSocket ConnectionManager + the Redis pub/sub listener
     models.py, schemas.py, db.py / db_sync.py, config.py, exceptions.py
-  alembic/         one migration: initial schema (users, tasks)
+  alembic/         migrations: initial schema (users, tasks) + users.access_token
   tests/           149 tests — see "How to test" below
 frontend/
   src/
-    api/           tiny fetch-based client (client.ts, tasks.ts)
+    api/           tiny fetch-based client (client.ts, tasks.ts, me.ts)
+    auth.ts        dashboard token storage, and scrubbing it from the URL
     components/    AppShell, Header, KanbanBoard/Column, TaskCard, TaskModal,
-                    TaskDetails, Toast, EmptyState, LoadingState, ...
-    hooks/         useTasks (state + optimistic updates), useTaskSocket, useToasts,
-                    useTheme (light/dark, persisted to localStorage)
-    types/         Task, TaskStatus, WebSocket event, API error shapes
+                    TaskDetails, ConnectScreen, Toast, EmptyState, LoadingState, ...
+    hooks/         useTasks (state + optimistic updates), useTaskSocket, useSession,
+                    useToasts, useTheme (light/dark, persisted to localStorage)
+    types/         Task, TaskStatus, Me, WebSocket event, API error shapes
 docker-compose.yml
 .env.example
 PLAN.md            the original architecture plan this was built from
@@ -230,8 +233,8 @@ since nothing outside the compose network needs to reach them directly.
 
 ## Database migrations
 
-One Alembic migration (`backend/alembic/versions/..._initial_schema...py`) creates
-`users` and `tasks`. It runs automatically on every `backend` container start
+The Alembic migrations in `backend/alembic/versions/` create `users` and `tasks`, then
+add `users.access_token`. They run automatically on every `backend` container start
 (`backend/entrypoint.sh` → `alembic upgrade head`, before uvicorn starts) — reproducible
 by construction: a fresh `docker compose up --build` always ends up on the same schema,
 and re-running it is a no-op (idempotent) if already at head.
@@ -313,13 +316,14 @@ test that force-fails the `PATCH` call and checks both the rollback and the toas
 
 **Backend** — 149 tests (`pytest`), no mocking of the database — a real Postgres
 (a `*_test` database) with each test isolated in a rolled-back transaction/savepoint.
-Covers: task CRUD + validation, the voice pipeline's success/failure paths (download
-failure, invalid audio, transcription failure, empty transcript) with a fake
+Covers: task CRUD + validation, per-user board isolation and both authentication paths
+(bearer token, and the bot's internal call), the voice pipeline's success/failure paths
+(download failure, invalid audio, transcription failure, empty transcript) with a fake
 Telegram/Whisper client, the Celery task's retry configuration and failure
 notification, realtime event publishing (including that a broken Redis never breaks a
-request), the WebSocket endpoint against a real Redis, and two concurrency
-regression tests for a user-creation race condition (see "Known limitations" fixed
-below).
+request), per-user event routing, the WebSocket endpoint against a real Redis, the
+bot's screens (`/list`, the task view, delete confirmation), and two concurrency
+regression tests for a user-creation race condition.
 
 ```bash
 cd backend
@@ -347,7 +351,8 @@ cp .env.example .env   # add TELEGRAM_BOT_TOKEN + OPENAI_API_KEY to test the bot
 docker compose up --build
 ```
 
-1. Open http://localhost:3001 — empty board, green "Live" WebSocket badge.
+1. Open http://localhost:3001 — the Telegram connect screen. Send `/dashboard` to your
+   bot and follow the link: an empty board with a green "Live" WebSocket badge.
 2. Click **New Task**, fill in a title, submit — it appears on the board instantly,
    no reload.
 3. Message your bot on Telegram: plain text → a task appears on the board within a
