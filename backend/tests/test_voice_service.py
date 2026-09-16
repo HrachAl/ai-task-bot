@@ -11,7 +11,12 @@ from app.exceptions import (
 )
 from app.models import Task
 from app.services import voice as voice_module
-from app.services.voice import process_voice_message
+from app.services.voice import (
+    MAX_TASK_DESCRIPTION_LENGTH,
+    MAX_TASK_TITLE_LENGTH,
+    process_voice_message,
+    split_transcript,
+)
 
 
 @pytest.fixture(autouse=True)
@@ -150,9 +155,11 @@ class TestVoicePipelineHappyPath:
 
         assert first.user_id == second.user_id
 
-    def test_transcript_longer_than_limit_is_truncated(self, sync_db_session):
+    def test_a_long_transcript_is_kept_in_full_in_the_description(self, sync_db_session):
+        """Raising the duration limit is pointless if the extra speech is
+        thrown away — the card gets a headline, the task keeps everything."""
         telegram = FakeTelegramClient()
-        long_text = "x" * 600
+        long_text = "Позвонить в банк. " + "Ещё нужно вот что. " * 40
         transcriber = FakeTranscriber(text=long_text)
 
         task = process_voice_message(
@@ -160,7 +167,21 @@ class TestVoicePipelineHappyPath:
             telegram_id=303, username=None, telegram_file_id="f1", chat_id=303,
         )
 
-        assert len(task.title) == 500
+        assert task.title == "Позвонить в банк."
+        assert task.description == " ".join(long_text.split())
+        assert len(task.description) > len(task.title)
+
+    def test_a_short_transcript_stays_a_plain_title(self, sync_db_session):
+        telegram = FakeTelegramClient()
+        transcriber = FakeTranscriber(text="Позвонить в банк завтра")
+
+        task = process_voice_message(
+            sync_db_session, telegram, transcriber,
+            telegram_id=304, username=None, telegram_file_id="f1", chat_id=304,
+        )
+
+        assert task.title == "Позвонить в банк завтра"
+        assert task.description is None
 
     def test_passes_filename_derived_from_telegram_file_path(self, sync_db_session):
         telegram = FakeTelegramClient(file_path="voice/AwAC123.oga")
@@ -253,3 +274,52 @@ class TestVoicePipelineFailures:
             )
 
         fake_notify_delay.assert_not_called()
+
+
+class TestSplitTranscript:
+    """How a transcript becomes a card. Pure function, so every edge case is
+    cheap to pin down here rather than through the whole pipeline."""
+
+    def test_short_text_is_the_title_and_nothing_else(self):
+        title, description = split_transcript("Buy milk")
+        assert title == "Buy milk"
+        assert description is None
+
+    def test_whitespace_is_collapsed(self):
+        title, _ = split_transcript("  Buy   milk\ntoday  ")
+        assert title == "Buy milk today"
+
+    def test_long_text_is_headlined_by_its_first_sentence(self):
+        text = "Call the bank. " + "There is more to say. " * 20
+        title, description = split_transcript(text)
+        assert title == "Call the bank."
+        assert description.startswith("Call the bank. There is more")
+
+    def test_nothing_the_user_said_is_lost(self):
+        text = "First thing. " + "word " * 300
+        _, description = split_transcript(text)
+        assert description == " ".join(text.split())
+
+    def test_a_long_run_on_sentence_is_cut_on_a_word(self):
+        """No punctuation to cut at — the headline must still not end
+        mid-word."""
+        text = "word " * 200
+        title, description = split_transcript(text)
+        assert len(title) <= MAX_TASK_TITLE_LENGTH
+        assert title.endswith("…")
+        assert "wor…" not in title  # cut between words, not inside one
+        assert description is not None
+
+    def test_a_first_sentence_longer_than_the_limit_is_also_cut(self):
+        text = "a" * 400 + ". then more. " * 10
+        title, _ = split_transcript(text)
+        assert len(title) <= MAX_TASK_TITLE_LENGTH
+
+    def test_description_is_capped_at_the_api_schema_limit(self):
+        text = "Start. " + "x " * 10_000
+        _, description = split_transcript(text)
+        assert len(description) == MAX_TASK_DESCRIPTION_LENGTH
+
+    def test_question_and_exclamation_marks_end_a_sentence_too(self):
+        title, _ = split_transcript("Did you call them? " + "More text here. " * 20)
+        assert title == "Did you call them?"

@@ -25,6 +25,9 @@
   line-height: 1.6;
   color: var(--color-text-muted);
   white-space: pre-wrap;
+  /* A voice transcript can be long and is not guaranteed to have spaces
+     where the layout needs them. */
+  overflow-wrap: anywhere;
 }
 
 .noDescription {

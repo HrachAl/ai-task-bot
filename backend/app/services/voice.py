@@ -6,6 +6,7 @@ the Celery worker that calls it runs synchronously.
 """
 
 import logging
+import re
 
 from sqlalchemy.orm import Session
 
@@ -18,7 +19,42 @@ from app.services.sync_repo import create_task_sync
 
 logger = logging.getLogger(__name__)
 
-MAX_TASK_TITLE_LENGTH = 500
+# A Kanban card needs a headline, not a monologue. Anything past this goes
+# into the description, so a long recording stays fully readable without
+# turning the board into a wall of text.
+MAX_TASK_TITLE_LENGTH = 120
+# Matches TaskCreate.description in the API schema, so a voice task can never
+# hold something the REST endpoint would reject.
+MAX_TASK_DESCRIPTION_LENGTH = 5000
+
+_SENTENCE_END = re.compile(r"(?<=[.!?…])\s")
+
+
+def split_transcript(transcript: str) -> tuple[str, str | None]:
+    """Turn a transcript into (title, description).
+
+    A short note becomes the title alone. A longer one is headlined by its
+    first sentence and keeps the full text in the description — nothing the
+    user said is thrown away, which is the whole point of raising the
+    duration limit.
+    """
+    full = " ".join(transcript.split())
+    if len(full) <= MAX_TASK_TITLE_LENGTH:
+        return full, None
+
+    # Prefer a sentence boundary; Whisper punctuates, so this usually gives a
+    # natural headline rather than a cut-off phrase.
+    first_sentence = _SENTENCE_END.split(full, maxsplit=1)[0]
+    if len(first_sentence) <= MAX_TASK_TITLE_LENGTH:
+        title = first_sentence
+    else:
+        # No usable boundary — cut on a word instead of mid-syllable.
+        head = full[:MAX_TASK_TITLE_LENGTH - 1]
+        cut = head.rsplit(" ", 1)[0] if " " in head else head
+        title = cut + "…"
+
+    return title, full[:MAX_TASK_DESCRIPTION_LENGTH]
+
 
 # Mirrors app.bot.handlers.STATUS_LABELS. Duplicated rather than imported:
 # that module is aiogram-specific, while this is rendered by the worker's
@@ -67,9 +103,15 @@ def process_voice_message(
 
     filename = file_path.rsplit("/", 1)[-1] if file_path else "voice.ogg"
     transcript = transcriber.transcribe(audio_bytes, filename=filename)
-    title = transcript[:MAX_TASK_TITLE_LENGTH]
+    title, description = split_transcript(transcript)
 
-    task = create_task_sync(db, telegram_id=telegram_id, username=username, title=title)
+    task = create_task_sync(
+        db,
+        telegram_id=telegram_id,
+        username=username,
+        title=title,
+        description=description,
+    )
     logger.info("Created task %s from voice message for telegram_id=%s", task.id, telegram_id)
     try:
         publish_task_event_sync("task_created", task)
@@ -82,10 +124,11 @@ def process_voice_message(
     # scope, so importing it back here would be circular.
     from app.worker.tasks import notify_telegram_task
 
+    saved_in_full = "\n📄 Full transcript saved in the task." if description else ""
     try:
         notify_telegram_task.delay(
             chat_id,
-            f'✅ Task added: "{title}"\nSet a status?',
+            f'✅ Task added: "{title}"{saved_in_full}\nSet a status?',
             message_id=ack_message_id,
             reply_markup=_status_keyboard(task.id),
         )

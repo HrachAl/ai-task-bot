@@ -29,7 +29,7 @@ class Settings(BaseSettings):
 
     # --- Telegram ---
     telegram_bot_token: str = ""
-    max_voice_duration_seconds: int = 120
+    max_voice_duration_seconds: int = 240
     max_voice_file_mb: int = 20
     telegram_api_base_url: str = "https://api.telegram.org"
     telegram_request_timeout_seconds: float = 15.0

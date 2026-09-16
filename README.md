@@ -57,6 +57,11 @@ No `Task` row exists until transcription actually succeeds — a failed or empty
 transcription never leaves partial data behind, and the bot edits its own "🎤
 transcribing…" placeholder message with the final result (or a clear failure notice).
 
+A transcript is split rather than truncated: the first sentence becomes the card's
+title, and the full text is kept in the task's description. Nothing the user said is
+discarded, and a four-minute recording still leaves the board readable — the card
+clamps the description to two lines, and the detail panel shows all of it.
+
 Both the text and voice confirmations attach an inline keyboard (Pending / In Progress
 / Completed). Tapping a button calls the same `PATCH /api/tasks/{id}` that the
 dashboard's drag-and-drop uses, so the status change reaches the board without leaving
@@ -119,7 +124,7 @@ backend/
     realtime/     WebSocket ConnectionManager + the Redis pub/sub listener
     models.py, schemas.py, db.py / db_sync.py, config.py, exceptions.py
   alembic/         migrations: initial schema (users, tasks) + users.access_token
-  tests/           149 tests — see "How to test" below
+  tests/           158 tests — see "How to test" below
 frontend/
   src/
     api/           tiny fetch-based client (client.ts, tasks.ts, me.ts)
@@ -314,7 +319,7 @@ test that force-fails the `PATCH` call and checks both the rollback and the toas
 
 ## How to test the application
 
-**Backend** — 149 tests (`pytest`), no mocking of the database — a real Postgres
+**Backend** — 158 tests (`pytest`), no mocking of the database — a real Postgres
 (a `*_test` database) with each test isolated in a rolled-back transaction/savepoint.
 Covers: task CRUD + validation, per-user board isolation and both authentication paths
 (bearer token, and the bot's internal call), the voice pipeline's success/failure paths

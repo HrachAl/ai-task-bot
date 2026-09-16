@@ -40,10 +40,11 @@ def create_task_sync(
     telegram_id: int,
     username: str | None,
     title: str,
+    description: str | None = None,
     status: TaskStatus = TaskStatus.PENDING,
 ) -> Task:
     user = get_or_create_user_sync(db, telegram_id=telegram_id, username=username)
-    task = Task(user_id=user.id, title=title, status=status)
+    task = Task(user_id=user.id, title=title, description=description, status=status)
     db.add(task)
     db.commit()
     db.refresh(task)
