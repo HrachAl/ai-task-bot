@@ -14,6 +14,8 @@ from app.services import voice as voice_module
 from app.services.voice import (
     MAX_TASK_DESCRIPTION_LENGTH,
     MAX_TASK_TITLE_LENGTH,
+    TELEGRAM_MESSAGE_LIMIT,
+    build_confirmation,
     process_voice_message,
     split_transcript,
 )
@@ -323,3 +325,22 @@ class TestSplitTranscript:
     def test_question_and_exclamation_marks_end_a_sentence_too(self):
         title, _ = split_transcript("Did you call them? " + "More text here. " * 20)
         assert title == "Did you call them?"
+
+
+class TestBuildConfirmation:
+    def test_a_short_note_shows_just_the_title(self):
+        text = build_confirmation("Buy milk", None)
+        assert text == '✅ Task added: "Buy milk"\nSet a status?'
+
+    def test_a_long_note_shows_the_full_transcript_in_the_chat(self):
+        full = "Call the bank. " + "There is more to say. " * 20
+        text = build_confirmation("Call the bank.", full)
+        assert full in text
+        assert text.endswith("Set a status?")
+
+    def test_a_transcript_too_long_for_telegram_is_trimmed_to_fit(self):
+        full = "word " * MAX_TASK_DESCRIPTION_LENGTH
+        text = build_confirmation("Title", full[:MAX_TASK_DESCRIPTION_LENGTH])
+        assert len(text) <= TELEGRAM_MESSAGE_LIMIT
+        assert "(full text is in the task)" in text
+        assert text.endswith("Set a status?")

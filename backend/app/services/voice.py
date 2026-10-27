@@ -27,6 +27,9 @@ MAX_TASK_TITLE_LENGTH = 120
 # hold something the REST endpoint would reject.
 MAX_TASK_DESCRIPTION_LENGTH = 5000
 
+# Telegram rejects sendMessage/editMessageText text longer than this.
+TELEGRAM_MESSAGE_LIMIT = 4096
+
 _SENTENCE_END = re.compile(r"(?<=[.!?…])\s")
 
 
@@ -64,6 +67,24 @@ _STATUS_BUTTONS = [
     ("in_progress", "🔧 In Progress"),
     ("completed", "✅ Completed"),
 ]
+
+
+def build_confirmation(title: str, description: str | None) -> str:
+    """The bot's reply to a voice note. A long note shows its whole
+    transcript right in the chat, trimmed only if it would overflow
+    Telegram's message limit — the task still keeps every word."""
+    header = f'✅ Task added: "{title}"'
+    footer = "\nSet a status?"
+    if not description:
+        return header + footer
+
+    header += "\n\n📄 Full transcript:\n"
+    room = TELEGRAM_MESSAGE_LIMIT - len(header) - len(footer) - 1
+    if len(description) > room:
+        trimmed = "…\n(full text is in the task)"
+        head = description[: room - len(trimmed)]
+        description = (head.rsplit(" ", 1)[0] if " " in head else head) + trimmed
+    return f"{header}{description}\n{footer}"
 
 
 def _status_keyboard(task_id: int) -> dict:
@@ -124,11 +145,10 @@ def process_voice_message(
     # scope, so importing it back here would be circular.
     from app.worker.tasks import notify_telegram_task
 
-    saved_in_full = "\n📄 Full transcript saved in the task." if description else ""
     try:
         notify_telegram_task.delay(
             chat_id,
-            f'✅ Task added: "{title}"{saved_in_full}\nSet a status?',
+            build_confirmation(title, description),
             message_id=ack_message_id,
             reply_markup=_status_keyboard(task.id),
         )
